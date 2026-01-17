@@ -2,12 +2,29 @@
 
 import json
 import uuid
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
+
+from pydantic import BaseModel
 
 from .exceptions import StorageError
 from .models import Card, CardData, SignupBonus
 from .library import CardTemplate
+from .normalize import normalize_issuer, match_to_library_template
+
+
+def _serialize_for_json(obj):
+    """Recursively convert Pydantic models and other types for JSON serialization."""
+    if isinstance(obj, BaseModel):
+        return obj.model_dump()
+    elif isinstance(obj, dict):
+        return {k: _serialize_for_json(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [_serialize_for_json(item) for item in obj]
+    elif isinstance(obj, (date, datetime)):
+        return obj.isoformat()
+    else:
+        return obj
 
 
 class CardStorage:
@@ -86,15 +103,23 @@ class CardStorage:
         Returns:
             The created Card object with generated ID.
         """
+        # Normalize issuer
+        normalized_issuer = normalize_issuer(card_data.issuer)
+
+        # Try to match to library template
+        template_id = match_to_library_template(card_data.name, normalized_issuer)
+
         card = Card(
             id=str(uuid.uuid4()),
             name=card_data.name,
-            issuer=card_data.issuer,
+            issuer=normalized_issuer,
             annual_fee=card_data.annual_fee,
             signup_bonus=card_data.signup_bonus,
             credits=card_data.credits,
             opened_date=opened_date,
             raw_text=raw_text,
+            template_id=template_id,
+            created_at=datetime.now(),
         )
 
         raw_cards = self._load_cards()
@@ -130,6 +155,8 @@ class CardStorage:
             signup_bonus=signup_bonus,
             credits=template.credits,
             opened_date=opened_date,
+            template_id=template.id,
+            created_at=datetime.now(),
         )
 
         raw_cards = self._load_cards()
@@ -150,9 +177,12 @@ class CardStorage:
         """
         raw_cards = self._load_cards()
 
+        # Serialize any Pydantic models in the updates to dicts
+        serialized_updates = _serialize_for_json(updates)
+
         for i, c in enumerate(raw_cards):
             if c.get("id") == card_id:
-                raw_cards[i].update(updates)
+                raw_cards[i].update(serialized_updates)
                 self._save_cards(raw_cards)
                 return Card.model_validate(raw_cards[i])
 

@@ -1,6 +1,6 @@
 """Pydantic data models for ChurnPilot."""
 
-from datetime import date
+from datetime import date, datetime
 from pydantic import BaseModel, Field
 
 
@@ -30,6 +30,21 @@ class SignupBonus(BaseModel):
     )
 
 
+class CreditUsage(BaseModel):
+    """Tracks usage of a single credit/benefit."""
+
+    # Period when the credit was last marked as used (e.g., "2024-01", "2024-Q1", "2024-H1", "2024")
+    last_used_period: str | None = Field(
+        default=None,
+        description="Period when credit was last used"
+    )
+    # If set, reminder is snoozed until this date
+    reminder_snoozed_until: date | None = Field(
+        default=None,
+        description="Date until which the reminder is snoozed"
+    )
+
+
 class Card(BaseModel):
     """A credit card with all tracked information."""
 
@@ -39,6 +54,10 @@ class Card(BaseModel):
     issuer: str = Field(..., description="Card issuer (Chase, Amex, etc.)")
     annual_fee: int = Field(default=0, description="Annual fee in dollars")
     signup_bonus: SignupBonus | None = Field(default=None, description="SUB details")
+    sub_spend_progress: float | None = Field(
+        default=None, description="Current spending towards SUB requirement"
+    )
+    sub_achieved: bool = Field(default=False, description="Whether SUB has been earned")
     credits: list[Credit] = Field(default_factory=list, description="Card credits/perks")
     opened_date: date | None = Field(default=None, description="Account open date")
     annual_fee_date: date | None = Field(
@@ -47,6 +66,20 @@ class Card(BaseModel):
     notes: str | None = Field(default=None, description="User notes")
     raw_text: str | None = Field(
         default=None, description="Original text used for extraction"
+    )
+    template_id: str | None = Field(
+        default=None, description="Library template ID if matched"
+    )
+    created_at: datetime | None = Field(
+        default=None, description="When the card was added to the system"
+    )
+    credit_usage: dict[str, CreditUsage] = Field(
+        default_factory=dict,
+        description="Tracks usage of each credit by name"
+    )
+    benefits_reminder_snoozed_until: date | None = Field(
+        default=None,
+        description="If set, all benefit reminders snoozed until this date"
     )
 
 

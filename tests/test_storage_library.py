@@ -10,8 +10,9 @@ from datetime import date
 from pathlib import Path
 
 from src.core.storage import CardStorage
-from src.core.models import Card, SignupBonus, Credit
+from src.core.models import Card, SignupBonus, Credit, CreditUsage
 from src.core.library import CardTemplate, get_template
+from src.core.periods import mark_credit_used
 
 
 class TestCardNickname:
@@ -276,6 +277,210 @@ class TestStorageWithNickname:
         retrieved = temp_storage.get_card(card.id)
         assert retrieved is not None
         assert retrieved.nickname == "Retrievable"
+
+
+class TestSubProgress:
+    """Tests for SUB progress tracking fields."""
+
+    def test_card_sub_progress_default(self):
+        """Test that sub_spend_progress defaults to None."""
+        card = Card(
+            id="test-123",
+            name="Test Card",
+            issuer="Test Bank",
+            annual_fee=100,
+        )
+
+        assert card.sub_spend_progress is None
+        assert card.sub_achieved is False
+
+    def test_card_with_sub_progress(self):
+        """Test creating a Card with SUB progress tracking."""
+        card = Card(
+            id="test-123",
+            name="Test Card",
+            issuer="Test Bank",
+            annual_fee=100,
+            signup_bonus=SignupBonus(
+                points_or_cash="80,000 points",
+                spend_requirement=6000.0,
+                time_period_days=90,
+            ),
+            sub_spend_progress=2500.0,
+            sub_achieved=False,
+        )
+
+        assert card.sub_spend_progress == 2500.0
+        assert card.sub_achieved is False
+
+    def test_card_sub_achieved(self):
+        """Test marking SUB as achieved."""
+        card = Card(
+            id="test-123",
+            name="Test Card",
+            issuer="Test Bank",
+            annual_fee=100,
+            signup_bonus=SignupBonus(
+                points_or_cash="80,000 points",
+                spend_requirement=6000.0,
+                time_period_days=90,
+            ),
+            sub_spend_progress=6500.0,
+            sub_achieved=True,
+        )
+
+        assert card.sub_achieved is True
+        assert card.sub_spend_progress == 6500.0
+
+    def test_sub_progress_serialization(self):
+        """Test that SUB progress fields are properly serialized."""
+        card = Card(
+            id="test-123",
+            name="Test Card",
+            issuer="Test Bank",
+            annual_fee=100,
+            sub_spend_progress=1234.56,
+            sub_achieved=True,
+        )
+
+        # Serialize and deserialize
+        card_dict = card.model_dump()
+        assert card_dict["sub_spend_progress"] == 1234.56
+        assert card_dict["sub_achieved"] is True
+
+        # Recreate from dict
+        restored = Card(**card_dict)
+        assert restored.sub_spend_progress == 1234.56
+        assert restored.sub_achieved is True
+
+
+class TestCreditUsageSerialization:
+    """Tests for credit_usage serialization through storage.
+
+    These tests verify that CreditUsage objects survive the JSON save/load cycle.
+    This is a regression test for the bug where CreditUsage was serialized as
+    its string representation instead of a dictionary.
+    """
+
+    @pytest.fixture
+    def temp_storage(self):
+        """Create a temporary storage directory for tests."""
+        temp_dir = tempfile.mkdtemp()
+        storage = CardStorage(data_dir=temp_dir)
+        yield storage
+        shutil.rmtree(temp_dir, ignore_errors=True)
+
+    @pytest.fixture
+    def card_with_credits(self, temp_storage):
+        """Create a card with credits for testing."""
+        template = CardTemplate(
+            id="test_card",
+            name="Test Card",
+            issuer="Test Bank",
+            annual_fee=95,
+            credits=[
+                Credit(name="Monthly Credit", amount=10.0, frequency="monthly"),
+                Credit(name="Annual Credit", amount=100.0, frequency="annual"),
+            ],
+        )
+        return temp_storage.add_card_from_template(template=template)
+
+    def test_credit_usage_survives_update_and_reload(self, temp_storage, card_with_credits):
+        """Test that credit_usage is preserved through update_card and reload."""
+        # Mark a credit as used
+        credit_usage = mark_credit_used(
+            "Monthly Credit",
+            "monthly",
+            {},
+            date(2024, 1, 15)
+        )
+
+        # Update the card with credit_usage
+        temp_storage.update_card(card_with_credits.id, {"credit_usage": credit_usage})
+
+        # Create a new storage instance (simulates server restart)
+        new_storage = CardStorage(data_dir=temp_storage.data_dir)
+        loaded_card = new_storage.get_card(card_with_credits.id)
+
+        # Verify credit_usage was preserved
+        assert loaded_card is not None
+        assert "Monthly Credit" in loaded_card.credit_usage
+        assert loaded_card.credit_usage["Monthly Credit"].last_used_period == "2024-01"
+
+    def test_credit_usage_with_snooze_survives_reload(self, temp_storage, card_with_credits):
+        """Test that reminder_snoozed_until is preserved through save/load."""
+        credit_usage = {
+            "Monthly Credit": CreditUsage(
+                last_used_period="2024-01",
+                reminder_snoozed_until=date(2024, 2, 1)
+            )
+        }
+
+        # Update and reload
+        temp_storage.update_card(card_with_credits.id, {"credit_usage": credit_usage})
+        new_storage = CardStorage(data_dir=temp_storage.data_dir)
+        loaded_card = new_storage.get_card(card_with_credits.id)
+
+        # Verify both fields were preserved
+        assert loaded_card.credit_usage["Monthly Credit"].last_used_period == "2024-01"
+        assert loaded_card.credit_usage["Monthly Credit"].reminder_snoozed_until == date(2024, 2, 1)
+
+    def test_multiple_credits_usage_survives_reload(self, temp_storage, card_with_credits):
+        """Test that multiple credit usages are all preserved."""
+        credit_usage = {
+            "Monthly Credit": CreditUsage(last_used_period="2024-01"),
+            "Annual Credit": CreditUsage(last_used_period="2024"),
+        }
+
+        temp_storage.update_card(card_with_credits.id, {"credit_usage": credit_usage})
+        new_storage = CardStorage(data_dir=temp_storage.data_dir)
+        loaded_card = new_storage.get_card(card_with_credits.id)
+
+        assert len(loaded_card.credit_usage) == 2
+        assert loaded_card.credit_usage["Monthly Credit"].last_used_period == "2024-01"
+        assert loaded_card.credit_usage["Annual Credit"].last_used_period == "2024"
+
+    def test_benefits_reminder_snoozed_until_survives_reload(self, temp_storage, card_with_credits):
+        """Test that card-level snooze is preserved."""
+        temp_storage.update_card(
+            card_with_credits.id,
+            {"benefits_reminder_snoozed_until": date(2024, 3, 1)}
+        )
+
+        new_storage = CardStorage(data_dir=temp_storage.data_dir)
+        loaded_card = new_storage.get_card(card_with_credits.id)
+
+        assert loaded_card.benefits_reminder_snoozed_until == date(2024, 3, 1)
+
+    def test_mark_used_then_unused_cycle(self, temp_storage, card_with_credits):
+        """Test the full UI cycle: mark used -> reload -> mark unused -> reload.
+
+        This is a regression test for the bug where unchecking a credit caused
+        corruption because CreditUsage objects from loaded cards weren't being
+        properly serialized when passed back to update_card.
+        """
+        from src.core.periods import mark_credit_used, mark_credit_unused
+
+        # Step 1: Mark credit as used
+        usage = mark_credit_used("Monthly Credit", "monthly", {}, date(2024, 1, 15))
+        temp_storage.update_card(card_with_credits.id, {"credit_usage": usage})
+
+        # Step 2: Reload (simulates page refresh)
+        storage2 = CardStorage(data_dir=temp_storage.data_dir)
+        loaded_card = storage2.get_card(card_with_credits.id)
+        assert loaded_card.credit_usage["Monthly Credit"].last_used_period == "2024-01"
+
+        # Step 3: Mark as unused (this is exactly what the UI does)
+        new_usage = dict(loaded_card.credit_usage)  # UI copies like this
+        new_usage = mark_credit_unused("Monthly Credit", new_usage)
+        storage2.update_card(loaded_card.id, {"credit_usage": new_usage})
+
+        # Step 4: Reload again and verify
+        storage3 = CardStorage(data_dir=temp_storage.data_dir)
+        final_card = storage3.get_card(card_with_credits.id)
+
+        assert "Monthly Credit" in final_card.credit_usage
+        assert final_card.credit_usage["Monthly Credit"].last_used_period is None
 
 
 if __name__ == "__main__":
