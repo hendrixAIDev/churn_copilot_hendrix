@@ -1313,15 +1313,36 @@ def render_import_section():
 
                 parsed_cards, errors = import_from_csv(spreadsheet_data, skip_closed=True)
 
-                if errors:
-                    st.error(f"Errors: {', '.join(errors)}")
+                # Handle results (best-effort)
+                if not parsed_cards and errors:
+                    # Complete failure
+                    st.error("❌ Failed to parse any cards")
+                    with st.expander("Error details"):
+                        for error in errors:
+                            st.error(f"• {error}")
+                    return
+
                 elif not parsed_cards:
+                    # No cards found
                     st.warning("No cards found. Make sure your spreadsheet has card data and try again.")
+                    return
+
                 else:
-                    st.success(f"✓ Parsed {len(parsed_cards)} cards!")
+                    # Partial or complete success
+                    if errors:
+                        # Partial success - some cards failed
+                        st.warning(f"⚠️ Parsed {len(parsed_cards)} cards successfully, but {len(errors)} failed")
+                        with st.expander(f"Show {len(errors)} error(s)"):
+                            for error in errors:
+                                st.error(f"• {error}")
+                        st.info("✓ You can still import the successfully parsed cards below")
+                    else:
+                        # Complete success
+                        st.success(f"✓ Parsed {len(parsed_cards)} cards successfully!")
 
                     # Store in session state for preview
                     st.session_state.parsed_import = parsed_cards
+                    st.session_state.import_errors = errors
 
                     st.divider()
                     st.subheader("Preview")
