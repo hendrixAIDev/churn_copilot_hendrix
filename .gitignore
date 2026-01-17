@@ -110,6 +110,7 @@ coverage.xml
 # Claude Code / AI Tools
 # --------------------------------------------
 .claude/
+!.claude/skills/
 
 # --------------------------------------------
 # Logs & Temp Files
