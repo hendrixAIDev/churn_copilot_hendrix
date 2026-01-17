@@ -52,15 +52,55 @@ def init_session_state():
 
 
 def render_sidebar():
-    """Render the sidebar with app info."""
+    """Render the sidebar with app info and quick stats."""
     with st.sidebar:
         st.title("ChurnPilot")
-        st.caption("AI-Powered Card Management")
+        st.caption("Credit Card Management")
+
+        # Quick stats
+        cards = st.session_state.storage.get_all_cards()
+        if cards:
+            st.divider()
+            st.markdown("**Quick Stats**")
+
+            # Cards by issuer
+            issuers = {}
+            for card in cards:
+                issuers[card.issuer] = issuers.get(card.issuer, 0) + 1
+
+            for issuer, count in sorted(issuers.items(), key=lambda x: -x[1]):
+                st.caption(f"{issuer}: {count}")
+
+            # Upcoming deadlines
+            upcoming = []
+            for card in cards:
+                if card.signup_bonus and card.signup_bonus.deadline:
+                    days_left = (card.signup_bonus.deadline - date.today()).days
+                    if 0 <= days_left <= 30:
+                        upcoming.append((card, days_left, "SUB"))
+                if card.annual_fee_date:
+                    days_left = (card.annual_fee_date - date.today()).days
+                    if 0 <= days_left <= 30:
+                        upcoming.append((card, days_left, "AF"))
+
+            if upcoming:
+                st.divider()
+                st.markdown("**Upcoming (30 days)**")
+                for card, days, deadline_type in sorted(upcoming, key=lambda x: x[1]):
+                    name = card.nickname or card.name[:15]
+                    if deadline_type == "SUB":
+                        st.warning(f"{name}: SUB in {days}d")
+                    else:
+                        st.error(f"{name}: AF in {days}d")
+
         st.divider()
-        st.markdown("**Quick Links**")
-        st.markdown("- [US Credit Card Guide](https://www.uscreditcardguide.com)")
-        st.markdown("- [Doctor of Credit](https://www.doctorofcredit.com)")
-        st.markdown("- [r/churning](https://reddit.com/r/churning)")
+        st.markdown("**Resources**")
+        st.markdown("[US Credit Card Guide](https://www.uscreditcardguide.com)")
+        st.markdown("[Doctor of Credit](https://www.doctorofcredit.com)")
+        st.markdown("[r/churning](https://reddit.com/r/churning)")
+
+        st.divider()
+        st.caption(f"Library: {len(get_all_templates())} templates")
 
 
 def render_add_card_section():
@@ -239,6 +279,72 @@ def render_add_card_section():
                 st.error(f"Failed to save: {e}")
 
 
+def render_card_edit_form(card, editing_key: str):
+    """Render an inline edit form for a card."""
+    with st.container():
+        st.markdown("---")
+        st.markdown("**Edit Card**")
+
+        col1, col2 = st.columns(2)
+
+        with col1:
+            new_nickname = st.text_input(
+                "Nickname",
+                value=card.nickname or "",
+                key=f"edit_nickname_{card.id}",
+                placeholder="e.g., P2's Card",
+            )
+
+            new_opened_date = st.date_input(
+                "Opened Date",
+                value=card.opened_date,
+                key=f"edit_opened_{card.id}",
+            )
+
+        with col2:
+            new_af_date = st.date_input(
+                "Annual Fee Due Date",
+                value=card.annual_fee_date,
+                key=f"edit_af_date_{card.id}",
+            )
+
+            new_notes = st.text_area(
+                "Notes",
+                value=card.notes or "",
+                key=f"edit_notes_{card.id}",
+                height=100,
+            )
+
+        # Save/Cancel buttons
+        btn_col1, btn_col2, btn_col3 = st.columns([1, 1, 4])
+
+        with btn_col1:
+            if st.button("Save", key=f"save_{card.id}", type="primary"):
+                # Build updates dict
+                updates = {}
+                if new_nickname != (card.nickname or ""):
+                    updates["nickname"] = new_nickname if new_nickname else None
+                if new_opened_date != card.opened_date:
+                    updates["opened_date"] = new_opened_date
+                if new_af_date != card.annual_fee_date:
+                    updates["annual_fee_date"] = new_af_date
+                if new_notes != (card.notes or ""):
+                    updates["notes"] = new_notes if new_notes else None
+
+                if updates:
+                    st.session_state.storage.update_card(card.id, updates)
+
+                st.session_state[editing_key] = False
+                st.rerun()
+
+        with btn_col2:
+            if st.button("Cancel", key=f"cancel_{card.id}"):
+                st.session_state[editing_key] = False
+                st.rerun()
+
+        st.markdown("---")
+
+
 def get_issuer_color(issuer: str) -> str:
     """Get a color associated with a card issuer."""
     colors = {
@@ -266,9 +372,13 @@ def render_card_item(card):
     if card.nickname:
         title = f"{card.nickname} ({card.name})"
 
+    # Check if this card is being edited
+    editing_key = f"editing_{card.id}"
+    is_editing = st.session_state.get(editing_key, False)
+
     with st.container():
         # Use columns for a card-like layout
-        header_col, fee_col, action_col = st.columns([5, 2, 1])
+        header_col, fee_col, edit_col, del_col = st.columns([5, 2, 0.5, 0.5])
 
         with header_col:
             st.markdown(
@@ -283,10 +393,20 @@ def render_card_item(card):
             else:
                 st.markdown("**No AF**")
 
-        with action_col:
+        with edit_col:
+            if st.button("Edit" if not is_editing else "Cancel", key=f"edit_{card.id}", help="Edit card"):
+                st.session_state[editing_key] = not is_editing
+                st.rerun()
+
+        with del_col:
             if st.button("X", key=f"del_{card.id}", help="Delete card"):
                 st.session_state.storage.delete_card(card.id)
                 st.rerun()
+
+        # Edit form
+        if is_editing:
+            render_card_edit_form(card, editing_key)
+            return  # Don't show details while editing
 
         # Expandable details
         with st.expander("View Details", expanded=False):
