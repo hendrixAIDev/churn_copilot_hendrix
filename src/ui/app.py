@@ -1206,6 +1206,182 @@ def render_dashboard():
             render_card_item(card, show_issuer_header=True)
 
 
+def render_import_section():
+    """Render the spreadsheet import section."""
+    st.header("Import from Spreadsheet")
+
+    st.markdown("""
+    **Import your existing credit card tracking spreadsheet!**
+
+    ChurnPilot uses AI to understand your spreadsheet format automatically - works with:
+    - Google Sheets
+    - Excel files
+    - CSV files
+    - Any language (English, Chinese, etc.)
+    - Any column names or layout
+
+    We'll extract card names, fees, SUB status, benefits, and usage tracking.
+    """)
+
+    st.divider()
+
+    # Import method selection
+    import_method = st.radio(
+        "Choose import method:",
+        ["Paste CSV/TSV Data", "Upload File", "Google Sheets URL"],
+        horizontal=True
+    )
+
+    spreadsheet_data = None
+
+    if import_method == "Paste CSV/TSV Data":
+        st.info("💡 Copy your spreadsheet data (select all cells, Ctrl+C) and paste here.")
+        spreadsheet_data = st.text_area(
+            "Paste your spreadsheet data:",
+            height=200,
+            placeholder="Paste your spreadsheet data here...\nInclude column headers in the first row."
+        )
+
+    elif import_method == "Upload File":
+        uploaded_file = st.file_uploader(
+            "Upload CSV or Excel file",
+            type=["csv", "xlsx", "xls", "tsv"],
+            help="Upload your credit card tracking file"
+        )
+        if uploaded_file:
+            try:
+                if uploaded_file.name.endswith(('.xlsx', '.xls')):
+                    try:
+                        import pandas as pd
+                    except ImportError:
+                        st.error("📦 Missing dependency: pandas is required for Excel files.")
+                        st.info("Run: `pip install pandas openpyxl`")
+                        return
+
+                    try:
+                        df = pd.read_excel(uploaded_file)
+                        spreadsheet_data = df.to_csv(sep='\t', index=False)
+                    except ImportError as ie:
+                        if 'openpyxl' in str(ie):
+                            st.error("📦 Missing dependency: openpyxl is required for Excel files.")
+                            st.info("Run: `pip install openpyxl`")
+                        else:
+                            st.error(f"Failed to read Excel file: {ie}")
+                        return
+                else:
+                    spreadsheet_data = uploaded_file.getvalue().decode('utf-8')
+                st.success(f"Loaded {uploaded_file.name}")
+            except Exception as e:
+                st.error(f"Failed to read file: {e}")
+
+    elif import_method == "Google Sheets URL":
+        st.info("💡 Make sure your Google Sheet is shared as 'Anyone with the link can view'")
+        sheet_url = st.text_input(
+            "Google Sheets URL:",
+            placeholder="https://docs.google.com/spreadsheets/d/..."
+        )
+        if sheet_url and st.button("Fetch from Google Sheets"):
+            try:
+                import re
+                # Extract sheet ID and gid
+                sheet_id_match = re.search(r'/d/([a-zA-Z0-9-_]+)', sheet_url)
+                gid_match = re.search(r'[#&]gid=(\d+)', sheet_url)
+
+                if sheet_id_match:
+                    sheet_id = sheet_id_match.group(1)
+                    gid = gid_match.group(1) if gid_match else "0"
+
+                    # Build export URL
+                    export_url = f"https://docs.google.com/spreadsheets/d/{sheet_id}/export?format=tsv&gid={gid}"
+
+                    # Fetch the data
+                    import urllib.request
+                    with urllib.request.urlopen(export_url) as response:
+                        spreadsheet_data = response.read().decode('utf-8')
+
+                    st.success("✓ Fetched spreadsheet data!")
+                else:
+                    st.error("Invalid Google Sheets URL format")
+            except Exception as e:
+                st.error(f"Failed to fetch: {e}")
+
+    # Parse and preview
+    if spreadsheet_data and st.button("Parse Spreadsheet", type="primary"):
+        with st.spinner("🤖 AI is analyzing your spreadsheet..."):
+            try:
+                from src.core.importer import import_from_csv
+
+                parsed_cards, errors = import_from_csv(spreadsheet_data, skip_closed=True)
+
+                if errors:
+                    st.error(f"Errors: {', '.join(errors)}")
+                elif not parsed_cards:
+                    st.warning("No cards found. Make sure your spreadsheet has card data and try again.")
+                else:
+                    st.success(f"✓ Parsed {len(parsed_cards)} cards!")
+
+                    # Store in session state for preview
+                    st.session_state.parsed_import = parsed_cards
+
+                    st.divider()
+                    st.subheader("Preview")
+
+                    for i, card in enumerate(parsed_cards, 1):
+                        with st.expander(f"{i}. {card.card_name} - ${card.annual_fee}/yr", expanded=(i <= 3)):
+                            col1, col2 = st.columns(2)
+
+                            with col1:
+                                st.markdown(f"**Status:** {card.status or 'N/A'}")
+                                st.markdown(f"**Opened:** {card.opened_date or 'Unknown'}")
+
+                                if card.sub_reward:
+                                    st.markdown(f"**SUB:** {card.sub_reward}")
+                                    st.markdown(f"- Spend: ${card.sub_spend_requirement}")
+                                    st.markdown(f"- Period: {card.sub_time_period_days} days")
+                                    if card.sub_deadline:
+                                        st.markdown(f"- Deadline: {card.sub_deadline}")
+                                    st.markdown(f"- Achieved: {'✓ Yes' if card.sub_achieved else '○ No'}")
+
+                            with col2:
+                                if card.benefits:
+                                    st.markdown(f"**Benefits ({len(card.benefits)}):**")
+                                    for benefit in card.benefits:
+                                        status_icon = "✓" if benefit.get("is_used") else "○"
+                                        st.caption(f"{status_icon} ${benefit['amount']} {benefit['name']} ({benefit['frequency']})")
+
+            except Exception as e:
+                st.error(f"Failed to parse: {e}")
+                import traceback
+                with st.expander("Error details"):
+                    st.code(traceback.format_exc())
+
+    # Import button
+    if st.session_state.get("parsed_import"):
+        st.divider()
+
+        col1, col2 = st.columns([3, 1])
+        with col1:
+            st.info(f"Ready to import {len(st.session_state.parsed_import)} cards")
+        with col2:
+            if st.button("Import All Cards", type="primary", use_container_width=True):
+                with st.spinner("Importing cards..."):
+                    try:
+                        from src.core.importer import SpreadsheetImporter
+
+                        importer = SpreadsheetImporter()
+                        imported = importer.import_cards(st.session_state.parsed_import)
+
+                        st.success(f"✓ Successfully imported {len(imported)} cards!")
+                        st.session_state.parsed_import = None
+                        st.balloons()
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Import failed: {e}")
+                        import traceback
+                        with st.expander("Error details"):
+                            st.code(traceback.format_exc())
+
+
 def main():
     """Main application entry point."""
     st.set_page_config(
@@ -1220,14 +1396,17 @@ def main():
     init_session_state()
     render_sidebar()
 
-    # Two main tabs - Dashboard is primary
-    tab1, tab2 = st.tabs(["Dashboard", "Add Card"])
+    # Three main tabs - Dashboard is primary
+    tab1, tab2, tab3 = st.tabs(["Dashboard", "Add Card", "Import from Spreadsheet"])
 
     with tab1:
         render_dashboard()
 
     with tab2:
         render_add_card_section()
+
+    with tab3:
+        render_import_section()
 
 
 if __name__ == "__main__":
