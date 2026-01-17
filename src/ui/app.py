@@ -239,63 +239,234 @@ def render_add_card_section():
                 st.error(f"Failed to save: {e}")
 
 
+def get_issuer_color(issuer: str) -> str:
+    """Get a color associated with a card issuer."""
+    colors = {
+        "American Express": "#006FCF",
+        "Chase": "#124A8D",
+        "Capital One": "#D03027",
+        "Citi": "#003B70",
+        "Discover": "#FF6600",
+        "Bank of America": "#E31837",
+        "Wells Fargo": "#D71E28",
+        "US Bank": "#0C2340",
+        "Barclays": "#00AEEF",
+        "Bilt": "#000000",
+    }
+    return colors.get(issuer, "#666666")
+
+
+def render_card_item(card):
+    """Render a single card item with rich display."""
+    # Build the header with issuer color indicator
+    issuer_color = get_issuer_color(card.issuer)
+
+    # Card title
+    title = card.name
+    if card.nickname:
+        title = f"{card.nickname} ({card.name})"
+
+    with st.container():
+        # Use columns for a card-like layout
+        header_col, fee_col, action_col = st.columns([5, 2, 1])
+
+        with header_col:
+            st.markdown(
+                f"<span style='color: {issuer_color}; font-weight: bold;'>{card.issuer}</span> | "
+                f"**{title}**",
+                unsafe_allow_html=True
+            )
+
+        with fee_col:
+            if card.annual_fee > 0:
+                st.markdown(f"**${card.annual_fee}/yr**")
+            else:
+                st.markdown("**No AF**")
+
+        with action_col:
+            if st.button("X", key=f"del_{card.id}", help="Delete card"):
+                st.session_state.storage.delete_card(card.id)
+                st.rerun()
+
+        # Expandable details
+        with st.expander("View Details", expanded=False):
+            detail_col1, detail_col2 = st.columns(2)
+
+            with detail_col1:
+                # Basic info
+                if card.opened_date:
+                    days_held = (date.today() - card.opened_date).days
+                    st.write(f"**Opened:** {card.opened_date} ({days_held} days ago)")
+
+                if card.annual_fee_date:
+                    days_until_af = (card.annual_fee_date - date.today()).days
+                    if days_until_af <= 30:
+                        st.error(f"**AF Due:** {card.annual_fee_date} ({days_until_af} days)")
+                    elif days_until_af <= 60:
+                        st.warning(f"**AF Due:** {card.annual_fee_date} ({days_until_af} days)")
+                    else:
+                        st.write(f"**AF Due:** {card.annual_fee_date} ({days_until_af} days)")
+
+                # SUB tracking
+                if card.signup_bonus:
+                    st.write("---")
+                    st.write("**Sign-up Bonus:**")
+                    st.write(f"  {card.signup_bonus.points_or_cash}")
+                    st.write(f"  Spend ${card.signup_bonus.spend_requirement:,.0f} in {card.signup_bonus.time_period_days} days")
+
+                    if card.signup_bonus.deadline:
+                        days_left = (card.signup_bonus.deadline - date.today()).days
+                        if days_left < 0:
+                            st.error(f"  **EXPIRED** ({abs(days_left)} days ago)")
+                        elif days_left <= 14:
+                            st.error(f"  **Deadline:** {card.signup_bonus.deadline} ({days_left} days left!)")
+                        elif days_left <= 30:
+                            st.warning(f"  **Deadline:** {card.signup_bonus.deadline} ({days_left} days left)")
+                        else:
+                            st.write(f"  **Deadline:** {card.signup_bonus.deadline} ({days_left} days left)")
+
+            with detail_col2:
+                # Credits
+                if card.credits:
+                    st.write("**Credits/Perks:**")
+                    total_value = 0
+                    for credit in card.credits:
+                        # Calculate annual value
+                        if credit.frequency == "monthly":
+                            annual = credit.amount * 12
+                        elif credit.frequency == "quarterly":
+                            annual = credit.amount * 4
+                        elif credit.frequency == "semi-annual" or credit.frequency == "semi-annually":
+                            annual = credit.amount * 2
+                        else:
+                            annual = credit.amount
+                        total_value += annual
+
+                        notes = f" *({credit.notes})*" if credit.notes else ""
+                        st.write(f"- {credit.name}: ${credit.amount}/{credit.frequency}{notes}")
+
+                    st.write(f"**Total Credit Value:** ~${total_value:,.0f}/year")
+                else:
+                    st.write("*No credits/perks*")
+
+            # Notes
+            if card.notes:
+                st.write("---")
+                st.write(f"**Notes:** {card.notes}")
+
+        st.write("")  # Spacing between cards
+
+
 def render_dashboard():
-    """Render the card dashboard."""
+    """Render the card dashboard with filtering, sorting, and rich display."""
     st.header("Your Cards")
 
     cards = st.session_state.storage.get_all_cards()
 
     if not cards:
-        st.info("No cards yet. Use 'Add Card' to extract your first card.")
+        st.info("No cards yet. Go to 'Add Card' to add your first card.")
         return
 
-    # Summary metrics
-    col1, col2, col3 = st.columns(3)
+    # Calculate metrics
+    total_fees = sum(c.annual_fee for c in cards)
+    total_credits_value = sum(
+        sum(credit.amount for credit in c.credits) for c in cards
+    )
+    cards_with_sub = [c for c in cards if c.signup_bonus and c.signup_bonus.deadline]
+    urgent_subs = [
+        c for c in cards_with_sub
+        if c.signup_bonus.deadline and (c.signup_bonus.deadline - date.today()).days <= 30
+    ]
+
+    # Summary metrics row
+    col1, col2, col3, col4 = st.columns(4)
     with col1:
         st.metric("Total Cards", len(cards))
     with col2:
-        total_fees = sum(c.annual_fee for c in cards)
-        st.metric("Total Annual Fees", f"${total_fees:,}")
+        st.metric("Annual Fees", f"${total_fees:,}")
     with col3:
-        cards_with_sub = sum(1 for c in cards if c.signup_bonus)
-        st.metric("Active SUBs", cards_with_sub)
+        st.metric("Credits Value", f"${total_credits_value:,.0f}/yr")
+    with col4:
+        if urgent_subs:
+            st.metric("Urgent SUBs", len(urgent_subs), delta="Action needed", delta_color="inverse")
+        else:
+            st.metric("Active SUBs", len(cards_with_sub))
 
     st.divider()
 
-    # Card list
-    for card in cards:
-        display_name = f"**{card.name}**"
-        if card.nickname:
-            display_name += f" ({card.nickname})"
-        display_name += f" - {card.issuer}"
-        with st.expander(display_name, expanded=False):
-            col1, col2 = st.columns(2)
+    # Filter and sort controls
+    filter_col, sort_col, search_col = st.columns([2, 2, 3])
 
-            with col1:
-                st.write(f"**Annual Fee:** ${card.annual_fee}")
-                if card.opened_date:
-                    st.write(f"**Opened:** {card.opened_date}")
-                if card.annual_fee_date:
-                    days_until = (card.annual_fee_date - date.today()).days
-                    if days_until <= 30:
-                        st.warning(f"**AF Due:** {card.annual_fee_date} ({days_until} days)")
-                    else:
-                        st.write(f"**AF Due:** {card.annual_fee_date}")
+    with filter_col:
+        # Get unique issuers
+        issuers = sorted(set(c.issuer for c in cards))
+        issuer_filter = st.selectbox(
+            "Filter by Issuer",
+            options=["All Issuers"] + issuers,
+            key="issuer_filter",
+        )
 
-            with col2:
-                if card.signup_bonus:
-                    st.write("**SUB:**")
-                    st.write(f"- {card.signup_bonus.points_or_cash}")
-                    st.write(f"- Spend ${card.signup_bonus.spend_requirement:,.0f} in {card.signup_bonus.time_period_days} days")
+    with sort_col:
+        sort_option = st.selectbox(
+            "Sort by",
+            options=["Name (A-Z)", "Name (Z-A)", "Annual Fee (High)", "Annual Fee (Low)", "Date Opened (Recent)", "Date Opened (Oldest)"],
+            key="sort_option",
+        )
 
-            if card.credits:
-                st.write("**Credits:**")
-                for credit in card.credits:
-                    st.write(f"- {credit.name}: ${credit.amount}/{credit.frequency}")
+    with search_col:
+        search_query = st.text_input(
+            "Search",
+            placeholder="Search by name or nickname...",
+            key="search_query",
+        )
 
-            if st.button("Delete", key=f"del_{card.id}"):
-                st.session_state.storage.delete_card(card.id)
-                st.rerun()
+    # Apply filters
+    filtered_cards = cards
+
+    if issuer_filter != "All Issuers":
+        filtered_cards = [c for c in filtered_cards if c.issuer == issuer_filter]
+
+    if search_query:
+        query_lower = search_query.lower()
+        filtered_cards = [
+            c for c in filtered_cards
+            if query_lower in c.name.lower() or (c.nickname and query_lower in c.nickname.lower())
+        ]
+
+    # Apply sorting
+    if sort_option == "Name (A-Z)":
+        filtered_cards = sorted(filtered_cards, key=lambda c: c.name.lower())
+    elif sort_option == "Name (Z-A)":
+        filtered_cards = sorted(filtered_cards, key=lambda c: c.name.lower(), reverse=True)
+    elif sort_option == "Annual Fee (High)":
+        filtered_cards = sorted(filtered_cards, key=lambda c: c.annual_fee, reverse=True)
+    elif sort_option == "Annual Fee (Low)":
+        filtered_cards = sorted(filtered_cards, key=lambda c: c.annual_fee)
+    elif sort_option == "Date Opened (Recent)":
+        filtered_cards = sorted(
+            filtered_cards,
+            key=lambda c: c.opened_date if c.opened_date else date.min,
+            reverse=True
+        )
+    elif sort_option == "Date Opened (Oldest)":
+        filtered_cards = sorted(
+            filtered_cards,
+            key=lambda c: c.opened_date if c.opened_date else date.max
+        )
+
+    # Show filter results count
+    if len(filtered_cards) != len(cards):
+        st.caption(f"Showing {len(filtered_cards)} of {len(cards)} cards")
+
+    st.divider()
+
+    # Card list with improved display
+    if not filtered_cards:
+        st.info("No cards match your filters.")
+        return
+
+    for card in filtered_cards:
+        render_card_item(card)
 
 
 def render_library_section():
@@ -396,16 +567,14 @@ def main():
     init_session_state()
     render_sidebar()
 
-    tab1, tab2, tab3 = st.tabs(["Add Card", "From Library", "Dashboard"])
+    # Two main tabs - Dashboard is primary
+    tab1, tab2 = st.tabs(["Dashboard", "Add Card"])
 
     with tab1:
-        render_add_card_section()
+        render_dashboard()
 
     with tab2:
-        render_library_section()
-
-    with tab3:
-        render_dashboard()
+        render_add_card_section()
 
 
 if __name__ == "__main__":
