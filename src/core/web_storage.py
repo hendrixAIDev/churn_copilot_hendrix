@@ -44,20 +44,28 @@ def init_web_storage():
     This is the correct approach for web deployment with pilot users.
     Data must be in the browser, not on the server.
     """
+    # Initialize session state variables
     if "cards_data" not in st.session_state:
         st.session_state.cards_data = []
+    if "storage_initialized" not in st.session_state:
         st.session_state.storage_initialized = False
+    if "storage_load_attempted" not in st.session_state:
+        st.session_state.storage_load_attempted = False
 
-    if not st.session_state.storage_initialized:
+    # Only try to load once per session, but track if we got actual data
+    if not st.session_state.storage_load_attempted:
+        st.session_state.storage_load_attempted = True
+
         try:
             # Import here to avoid failure if not installed
             from streamlit_js_eval import streamlit_js_eval
 
-            # Use a more reliable approach - wait longer for result
+            # Use a more reliable approach with longer timeout
+            # Also distinguish between "no data" and "failed to load"
             js_code = f"""
             (function() {{
-                // Wait a bit for storage to be available
                 return new Promise((resolve) => {{
+                    // Wait a bit for storage to be available
                     setTimeout(() => {{
                         try {{
                             const data = localStorage.getItem('{STORAGE_KEY}');
@@ -65,31 +73,43 @@ def init_web_storage():
                             if (data) {{
                                 const parsed = JSON.parse(data);
                                 console.log('[ChurnPilot] Loaded', parsed.length, 'cards');
-                                resolve(parsed);
+                                resolve({{status: 'loaded', data: parsed}});
                             }} else {{
                                 console.log('[ChurnPilot] No data in localStorage');
-                                resolve(null);
+                                resolve({{status: 'empty', data: null}});
                             }}
                         }} catch (e) {{
                             console.error('[ChurnPilot] Load error:', e);
-                            resolve(null);
+                            resolve({{status: 'error', error: e.message}});
                         }}
-                    }}, 100);
+                    }}, 150);  // Slightly longer timeout for reliability
                 }});
             }})()
             """
 
             # Add a unique timestamp to force new evaluation each time
             import time
-            stored_data = streamlit_js_eval(js=js_code, key=f"load_storage_{int(time.time())}")
+            result = streamlit_js_eval(js=js_code, key=f"load_storage_{int(time.time())}")
 
-            if stored_data and isinstance(stored_data, list):
-                st.session_state.cards_data = stored_data
-                st.toast(f"📱 Loaded {len(stored_data)} cards from browser")
+            if result and isinstance(result, dict):
+                status = result.get('status')
+
+                if status == 'loaded' and result.get('data'):
+                    st.session_state.cards_data = result['data']
+                    st.session_state.storage_initialized = True
+                    st.toast(f"📱 Loaded {len(result['data'])} cards from browser")
+                elif status == 'empty':
+                    # Truly empty localStorage - this is fine
+                    st.session_state.storage_initialized = True
+                    st.info("👋 No saved data - starting fresh")
+                elif status == 'error':
+                    # Error reading localStorage
+                    st.warning(f"⚠️ localStorage error: {result.get('error', 'Unknown')}")
+                    st.session_state.storage_initialized = True
             else:
-                st.info("👋 No saved data - starting fresh")
-
-            st.session_state.storage_initialized = True
+                # streamlit_js_eval returned None - timing issue
+                # Don't mark as initialized, will retry on next interaction
+                st.warning("⚠️ Still loading... Please refresh if data doesn't appear")
 
         except ImportError:
             st.error("❌ streamlit-js-eval not installed. Install it for data persistence:\n\n`pip install streamlit-js-eval pyarrow`")

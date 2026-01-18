@@ -148,6 +148,138 @@ st.json({
     "storage_type": st.session_state.get('storage_type', None)
 })
 
+# Check 6: Persistence Test (add test card)
+st.header("6. Persistence Test")
+
+col1, col2 = st.columns(2)
+
+with col1:
+    if st.button("Add Test Card to localStorage"):
+        try:
+            from streamlit_js_eval import streamlit_js_eval
+            import time
+            import json
+
+            test_card = {
+                "id": f"test-card-{int(time.time())}",
+                "name": "Test Card for Persistence",
+                "issuer": "Test Bank",
+                "annual_fee": 0,
+                "credits": [],
+                "created_at": "2024-01-01T00:00:00"
+            }
+
+            # Get existing cards, add test card, save back
+            js_code = f"""
+            (function() {{
+                try {{
+                    let cards = [];
+                    const existing = localStorage.getItem('churnpilot_cards');
+                    if (existing) {{
+                        cards = JSON.parse(existing);
+                    }}
+
+                    const testCard = {json.dumps(test_card)};
+                    cards.push(testCard);
+
+                    localStorage.setItem('churnpilot_cards', JSON.stringify(cards));
+
+                    // Verify save
+                    const saved = localStorage.getItem('churnpilot_cards');
+                    const savedCards = JSON.parse(saved);
+
+                    return {{
+                        success: true,
+                        totalCards: savedCards.length,
+                        lastCard: savedCards[savedCards.length - 1].name
+                    }};
+                }} catch (e) {{
+                    return {{success: false, error: e.message}};
+                }}
+            }})()
+            """
+
+            result = streamlit_js_eval(js=js_code, key=f"add_test_{time.time()}")
+
+            if result and result.get('success'):
+                st.success(f"✓ Added test card! Total: {result.get('totalCards')}")
+                st.info("Now CLOSE this tab, reopen it, and click 'Check ChurnPilot Data' to verify persistence")
+            else:
+                st.error(f"✗ Failed: {result}")
+        except Exception as e:
+            st.error(f"✗ Exception: {e}")
+
+with col2:
+    if st.button("Clear All Test Data"):
+        try:
+            from streamlit_js_eval import streamlit_js_eval
+            import time
+
+            js_code = """
+            (function() {
+                try {
+                    localStorage.removeItem('churnpilot_cards');
+                    localStorage.removeItem('churnpilot_test');
+                    return {success: true};
+                } catch (e) {
+                    return {success: false, error: e.message};
+                }
+            })()
+            """
+
+            result = streamlit_js_eval(js=js_code, key=f"clear_{time.time()}")
+
+            if result and result.get('success'):
+                st.success("✓ Cleared all ChurnPilot localStorage data")
+            else:
+                st.error(f"✗ Failed: {result}")
+        except Exception as e:
+            st.error(f"✗ Exception: {e}")
+
+# Check 7: Automatic Load Test
+st.header("7. Automatic Load on Page Load")
+st.markdown("This section runs automatically to test if data loads on page load:")
+
+try:
+    from streamlit_js_eval import streamlit_js_eval
+    import time
+
+    # This runs automatically when page loads
+    js_code = """
+    (function() {
+        try {
+            const data = localStorage.getItem('churnpilot_cards');
+            if (data) {
+                const parsed = JSON.parse(data);
+                return {
+                    loaded: true,
+                    count: parsed.length,
+                    timestamp: new Date().toISOString()
+                };
+            } else {
+                return {loaded: false, timestamp: new Date().toISOString()};
+            }
+        } catch (e) {
+            return {error: e.message, timestamp: new Date().toISOString()};
+        }
+    })()
+    """
+
+    result = streamlit_js_eval(js=js_code, key=f"auto_load_{int(time.time())}")
+
+    if result:
+        if result.get('loaded'):
+            st.success(f"✓ Auto-loaded {result.get('count')} cards at {result.get('timestamp')}")
+        elif result.get('error'):
+            st.error(f"✗ Error during auto-load: {result.get('error')}")
+        else:
+            st.info(f"No data found at {result.get('timestamp')}")
+    else:
+        st.warning("⚠️ streamlit_js_eval returned None - this might be a timing issue")
+        st.info("Try refreshing the page")
+except Exception as e:
+    st.error(f"Auto-load exception: {e}")
+
 # Recommendations
 st.header("Recommendations")
 
@@ -163,8 +295,19 @@ st.markdown("""
 - Try in a different browser
 - Check if third-party cookies are blocked
 
+**If auto-load returns None:**
+- This is a timing issue with streamlit-js-eval
+- Refresh the page a few times
+- The Promise-based approach in web_storage.py should handle this
+
 **For pilot users on mobile/web:**
 - localStorage is the ONLY option that works
 - File-based storage won't work for web deployment
 - Each user needs their own browser-based data
+
+**Testing Persistence:**
+1. Click "Add Test Card to localStorage"
+2. CLOSE the browser tab completely
+3. Reopen this page
+4. Check if "7. Automatic Load on Page Load" shows your card
 """)
