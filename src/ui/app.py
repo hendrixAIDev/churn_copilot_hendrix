@@ -1818,7 +1818,7 @@ def render_action_required_tab():
                 color = "#ffc107"
 
             st.markdown(
-                f"<div style='padding: 12px; margin: 8px 0; border-left: 4px solid {color}; background: #f8f9fa; border-radius: 4px;'>"
+                f"<div style='padding: 12px; margin: 8px 0; border-left: 4px solid {color}; background: #f8f9fa; border-radius: 4px; color: #262730;'>"
                 f"<span style='font-weight: 600;'>[{urgency}] {item['display_name']}</span><br>"
                 f"<span style='color: #6c757d; font-size: 0.9rem;'>"
                 f"Deadline: {item['deadline']} ({days} days) | "
@@ -1846,7 +1846,7 @@ def render_action_required_tab():
                 color = "#ffc107"
 
             st.markdown(
-                f"<div style='padding: 12px; margin: 8px 0; border-left: 4px solid {color}; background: #f8f9fa; border-radius: 4px;'>"
+                f"<div style='padding: 12px; margin: 8px 0; border-left: 4px solid {color}; background: #f8f9fa; border-radius: 4px; color: #262730;'>"
                 f"<span style='font-weight: 600;'>{item['display_name']}</span><br>"
                 f"<span style='color: #6c757d; font-size: 0.9rem;'>"
                 f"Fee: ${item['amount']:.0f} | Due: {item['fee_date']} ({days} days)"
@@ -1881,7 +1881,7 @@ def render_action_required_tab():
 
         for item in missing_data:
             st.markdown(
-                f"<div style='padding: 8px; margin: 4px 0; border-left: 3px solid #6c757d; background: #f8f9fa; border-radius: 4px;'>"
+                f"<div style='padding: 8px; margin: 4px 0; border-left: 3px solid #6c757d; background: #f8f9fa; border-radius: 4px; color: #262730;'>"
                 f"<span style='font-weight: 500;'>{item['display_name']}</span> - No opened date"
                 f"</div>",
                 unsafe_allow_html=True
@@ -1978,7 +1978,7 @@ def render_five_twenty_four_tab():
             color = "#6c757d"  # Gray
 
         st.markdown(
-            f"<div style='padding: 12px; margin: 8px 0; border-left: 4px solid {color}; background: #f8f9fa; border-radius: 4px;'>"
+            f"<div style='padding: 12px; margin: 8px 0; border-left: 4px solid {color}; background: #f8f9fa; border-radius: 4px; color: #262730;'>"
             f"<span style='font-weight: 600;'>{display_name}</span><br>"
             f"<span style='color: #6c757d; font-size: 0.9rem;'>Opened: {card.opened_date} | Drops off: {drop_off} ({days} days)</span>"
             f"</div>",
