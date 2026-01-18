@@ -33,6 +33,13 @@ from .validation import (
     ValidationWarning,
     ValidationError,
 )
+from .enrichment import (
+    match_to_library_with_confidence,
+    enrich_card_data,
+    get_enrichment_summary,
+    should_enrich_card,
+    MatchResult,
+)
 
 __all__ = [
     # Models
@@ -92,4 +99,10 @@ __all__ = [
     "get_warning_messages",
     "ValidationWarning",
     "ValidationError",
+    # Enrichment
+    "match_to_library_with_confidence",
+    "enrich_card_data",
+    "get_enrichment_summary",
+    "should_enrich_card",
+    "MatchResult",
 ]
