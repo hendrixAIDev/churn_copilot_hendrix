@@ -2226,24 +2226,24 @@ def main():
     cards = st.session_state.storage.get_all_cards()
     if len(cards) == 0:
         st.markdown("""
-        <div style="padding: 1rem; background-color: #d1ecf1; border: 1px solid #bee5eb; border-radius: 0.5rem; color: #0c5460;">
+        <div style="padding: 1.2rem; background-color: rgba(33, 195, 84, 0.1); border: 1px solid rgba(33, 195, 84, 0.3); border-radius: 0.5rem; border-left: 4px solid rgba(33, 195, 84, 0.8);">
 
-        👋 <strong>Welcome to ChurnPilot!</strong>
+        <div style="font-size: 1.1rem; margin-bottom: 0.5rem;">👋 <strong>Welcome to ChurnPilot!</strong></div>
 
-        <p>ChurnPilot helps you track credit card signup bonuses, benefits, and deadlines.</p>
+        <p style="margin: 0.5rem 0;">ChurnPilot helps you track credit card signup bonuses, benefits, and deadlines.</p>
 
-        <p><strong>Quick Start:</strong></p>
-        <ol>
-        <li>Click the <strong style="background-color: #fff; padding: 2px 8px; border-radius: 4px;">Add Card</strong> tab above to add your first card</li>
-        <li>Select from library, extract from URL, or import a spreadsheet</li>
+        <p style="margin-top: 1rem; margin-bottom: 0.3rem;"><strong>Quick Start:</strong></p>
+        <ol style="margin-top: 0.3rem;">
+        <li style="margin: 0.3rem 0;">Switch to the <strong style="padding: 2px 6px; border-radius: 4px; border: 1px solid rgba(33, 195, 84, 0.5); background-color: rgba(33, 195, 84, 0.15);">Add Card</strong> tab above to add your first card</li>
+        <li style="margin: 0.3rem 0;">Select from library, extract from URL, or import a spreadsheet</li>
         </ol>
 
-        <p><strong>What ChurnPilot tracks:</strong></p>
-        <ul>
-        <li>Benefit usage (Uber credits, hotel credits, etc.)</li>
-        <li>Signup bonus deadlines (don't miss out on points!)</li>
-        <li>Annual fee dates (call for retention offers in time)</li>
-        <li>Chase 5/24 status (know when you can apply for more Chase cards)</li>
+        <p style="margin-top: 1rem; margin-bottom: 0.3rem;"><strong>What ChurnPilot tracks:</strong></p>
+        <ul style="margin-top: 0.3rem;">
+        <li style="margin: 0.2rem 0;">Benefit usage (Uber credits, hotel credits, etc.)</li>
+        <li style="margin: 0.2rem 0;">Signup bonus deadlines (don't miss out on points!)</li>
+        <li style="margin: 0.2rem 0;">Annual fee dates (call for retention offers in time)</li>
+        <li style="margin: 0.2rem 0;">Chase 5/24 status (know when you can apply for more Chase cards)</li>
         </ul>
 
         </div>
