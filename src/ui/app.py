@@ -133,6 +133,16 @@ from src.core import (
     RetentionOffer,
     calculate_five_twenty_four_status,
     get_five_twenty_four_timeline,
+    validate_opened_date,
+    validate_annual_fee,
+    validate_signup_bonus,
+    validate_card_name,
+    has_errors,
+    has_warnings,
+    get_error_messages,
+    get_warning_messages,
+    ValidationWarning,
+    ValidationError,
 )
 from src.core.preferences import PreferencesStorage, UserPreferences
 from src.core.exceptions import ExtractionError, StorageError, FetchError
@@ -395,6 +405,28 @@ def render_add_card_section():
                         st.caption("Deadline will be calculated from opened date")
 
                 if st.button("Add Card", type="primary", key="add_from_library", use_container_width=True):
+                    # Validate inputs before saving
+                    validation_results = []
+                    validation_results.append(validate_opened_date(lib_opened_date))
+                    validation_results.append(validate_annual_fee(template.annual_fee))
+                    validation_results.append(validate_signup_bonus(
+                        lib_sub_bonus,
+                        lib_sub_spend,
+                        lib_sub_days,
+                        lib_opened_date
+                    ))
+
+                    # Show errors (blocking)
+                    if has_errors(validation_results):
+                        for error_msg in get_error_messages(validation_results):
+                            st.error(error_msg)
+                        st.stop()
+
+                    # Show warnings (non-blocking)
+                    if has_warnings(validation_results):
+                        for warning_msg in get_warning_messages(validation_results):
+                            st.warning(warning_msg)
+
                     try:
                         # Build SUB if provided
                         signup_bonus = None
@@ -519,6 +551,29 @@ def render_extraction_result():
         st.write("")
         st.write("")
         if st.button("Save Card", type="primary", key="save_extracted"):
+            # Validate inputs before saving
+            validation_results = []
+            validation_results.append(validate_opened_date(ext_opened_date))
+            validation_results.append(validate_annual_fee(card_data.annual_fee))
+            if card_data.signup_bonus:
+                validation_results.append(validate_signup_bonus(
+                    card_data.signup_bonus.points_or_cash,
+                    card_data.signup_bonus.spend_requirement,
+                    card_data.signup_bonus.time_period_days,
+                    ext_opened_date
+                ))
+
+            # Show errors (blocking)
+            if has_errors(validation_results):
+                for error_msg in get_error_messages(validation_results):
+                    st.error(error_msg)
+                st.stop()
+
+            # Show warnings (non-blocking)
+            if has_warnings(validation_results):
+                for warning_msg in get_warning_messages(validation_results):
+                    st.warning(warning_msg)
+
             try:
                 card = st.session_state.storage.add_card(
                     card_data,
