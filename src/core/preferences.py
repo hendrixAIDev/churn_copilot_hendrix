@@ -21,6 +21,16 @@ class UserPreferences(BaseModel):
         description="Group cards by issuer"
     )
 
+    # Enrichment preferences
+    auto_enrich_enabled: bool = Field(
+        default=True,
+        description="Enable automatic enrichment from library templates"
+    )
+    enrichment_min_confidence: float = Field(
+        default=0.7,
+        description="Minimum confidence threshold for auto-enrichment (0.0-1.0)"
+    )
+
 
 class PreferencesStorage:
     """JSON file-based storage for user preferences."""
