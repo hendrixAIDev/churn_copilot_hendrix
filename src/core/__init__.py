@@ -1,6 +1,6 @@
 """Core business logic - framework agnostic."""
 
-from .models import Card, SignupBonus, Credit, CardData, CreditUsage
+from .models import Card, SignupBonus, Credit, CardData, CreditUsage, RetentionOffer
 from .storage import CardStorage
 from .preprocessor import preprocess_text, get_char_reduction
 from .fetcher import fetch_card_page, get_allowed_domains
@@ -20,6 +20,7 @@ from .periods import (
     snooze_all_reminders,
 )
 from .importer import SpreadsheetImporter, ParsedCard, import_from_csv
+from .five_twenty_four import calculate_five_twenty_four_status, get_five_twenty_four_timeline
 
 __all__ = [
     # Models
@@ -29,6 +30,7 @@ __all__ = [
     "CardData",
     "CardTemplate",
     "CreditUsage",
+    "RetentionOffer",
     # Storage
     "CardStorage",
     # Extraction pipeline (main API)
@@ -63,4 +65,7 @@ __all__ = [
     "SpreadsheetImporter",
     "ParsedCard",
     "import_from_csv",
+    # 5/24 tracking
+    "calculate_five_twenty_four_status",
+    "get_five_twenty_four_timeline",
 ]

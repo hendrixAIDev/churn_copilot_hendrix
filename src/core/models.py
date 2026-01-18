@@ -45,6 +45,17 @@ class CreditUsage(BaseModel):
     )
 
 
+class RetentionOffer(BaseModel):
+    """Tracks a retention offer received from an issuer."""
+
+    date_called: date = Field(..., description="Date of retention call")
+    offer_details: str = Field(
+        ..., description="Offer details (e.g., '20,000 points after $2,000 spend')"
+    )
+    accepted: bool = Field(..., description="Whether offer was accepted")
+    notes: str | None = Field(default=None, description="Additional notes")
+
+
 class Card(BaseModel):
     """A credit card with all tracked information."""
 
@@ -80,6 +91,18 @@ class Card(BaseModel):
     benefits_reminder_snoozed_until: date | None = Field(
         default=None,
         description="If set, all benefit reminders snoozed until this date"
+    )
+    is_business: bool = Field(
+        default=False,
+        description="Whether this is a business card (affects 5/24 calculation)"
+    )
+    closed_date: date | None = Field(
+        default=None,
+        description="Date the account was closed"
+    )
+    retention_offers: list[RetentionOffer] = Field(
+        default_factory=list,
+        description="History of retention offers received"
     )
 
 

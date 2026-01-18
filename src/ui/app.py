@@ -127,6 +127,9 @@ from src.core import (
     mark_credit_used,
     mark_credit_unused,
     snooze_all_reminders,
+    RetentionOffer,
+    calculate_five_twenty_four_status,
+    get_five_twenty_four_timeline,
 )
 from src.core.preferences import PreferencesStorage, UserPreferences
 from src.core.exceptions import ExtractionError, StorageError, FetchError
@@ -187,6 +190,25 @@ def render_sidebar():
 
             for issuer, count in sorted(issuers.items(), key=lambda x: -x[1]):
                 st.caption(f"{issuer}: {count}")
+
+            # 5/24 Status
+            st.divider()
+            five_24 = calculate_five_twenty_four_status(cards)
+            st.markdown("**Chase 5/24 Status**")
+
+            if five_24["status"] == "under":
+                st.success(f"{five_24['count']}/5 - Can apply")
+            elif five_24["status"] == "at":
+                st.warning(f"{five_24['count']}/5 - At limit")
+            else:
+                st.error(f"{five_24['count']}/5 - Over limit")
+
+            if five_24["next_drop_off"]:
+                st.caption(f"Next drop: {five_24['next_drop_off']} ({five_24['days_until_drop']}d)")
+
+            with st.expander("What is 5/24?"):
+                st.caption("Chase denies applications if you've opened 5+ personal cards from ANY issuer in the past 24 months.")
+                st.caption("Business cards don't count (except Cap1, Discover, TD Bank).")
 
             # Upcoming deadlines
             upcoming = []
@@ -498,12 +520,20 @@ def render_card_edit_form(card, editing_key: str):
                 key=f"edit_af_date_{card.id}",
             )
 
-            new_notes = st.text_area(
-                "Notes",
-                value=card.notes or "",
-                key=f"edit_notes_{card.id}",
-                height=100,
+            new_is_business = st.checkbox(
+                "Business Card",
+                value=card.is_business,
+                key=f"edit_is_business_{card.id}",
+                help="Business cards don't count toward 5/24 (except Cap1, Discover, TD Bank)"
             )
+
+        # Notes field (full width)
+        new_notes = st.text_area(
+            "Notes",
+            value=card.notes or "",
+            key=f"edit_notes_{card.id}",
+            height=100,
+        )
 
         # SUB tracking fields (only show if card has SUB)
         new_sub_progress = None
@@ -540,6 +570,57 @@ def render_card_edit_form(card, editing_key: str):
                     key=f"edit_sub_achieved_{card.id}",
                 )
 
+        # Retention Offers section
+        st.markdown("**Retention Offers**")
+        if card.retention_offers:
+            for i, offer in enumerate(card.retention_offers):
+                status_icon = "✓" if offer.accepted else "✗"
+                st.caption(f"{status_icon} {offer.date_called}: {offer.offer_details}")
+                if offer.notes:
+                    st.caption(f"   Notes: {offer.notes}")
+
+        # Add retention offer form (in expander)
+        with st.expander("➕ Add Retention Offer"):
+            ret_col1, ret_col2 = st.columns(2)
+            with ret_col1:
+                ret_date = st.date_input(
+                    "Date Called",
+                    value=date.today(),
+                    key=f"ret_date_{card.id}",
+                )
+                ret_offer = st.text_input(
+                    "Offer Details",
+                    placeholder="e.g., 20,000 points after $2,000 spend in 3 months",
+                    key=f"ret_offer_{card.id}",
+                )
+            with ret_col2:
+                ret_accepted = st.checkbox(
+                    "Accepted",
+                    value=False,
+                    key=f"ret_accepted_{card.id}",
+                )
+                ret_notes = st.text_input(
+                    "Notes (optional)",
+                    placeholder="e.g., Called before AF posted",
+                    key=f"ret_notes_{card.id}",
+                )
+
+            if st.button("Add Offer", key=f"add_retention_{card.id}"):
+                if ret_offer:
+                    # Add to retention_offers list
+                    new_offer = RetentionOffer(
+                        date_called=ret_date,
+                        offer_details=ret_offer,
+                        accepted=ret_accepted,
+                        notes=ret_notes if ret_notes else None,
+                    )
+                    updated_offers = list(card.retention_offers) + [new_offer]
+                    st.session_state.storage.update_card(card.id, {"retention_offers": updated_offers})
+                    st.success("Retention offer added!")
+                    st.rerun()
+                else:
+                    st.error("Please enter offer details")
+
         # Save/Cancel buttons
         btn_col1, btn_col2, btn_col3 = st.columns([1, 1, 4])
 
@@ -555,6 +636,8 @@ def render_card_edit_form(card, editing_key: str):
                     updates["annual_fee_date"] = new_af_date
                 if new_notes != (card.notes or ""):
                     updates["notes"] = new_notes if new_notes else None
+                if new_is_business != card.is_business:
+                    updates["is_business"] = new_is_business
 
                 # SUB progress updates
                 if card.signup_bonus:
@@ -1348,7 +1431,23 @@ def render_import_section():
                     st.subheader("Preview")
 
                     for i, card in enumerate(parsed_cards, 1):
-                        with st.expander(f"{i}. {card.card_name} - ${card.annual_fee}/yr", expanded=(i <= 3)):
+                        # Build title with urgency indicator
+                        title = f"{i}. {card.card_name} - ${card.annual_fee}/yr"
+
+                        # Add urgency badge if SUB is active
+                        if card.sub_reward and not card.sub_achieved:
+                            days_remaining = card.get_days_remaining()
+                            if days_remaining is not None:
+                                if days_remaining < 0:
+                                    title += " ⚠️ EXPIRED"
+                                elif days_remaining <= 30:
+                                    title += f" 🔴 {days_remaining} days left"
+                                elif days_remaining <= 60:
+                                    title += f" 🟡 {days_remaining} days left"
+                                else:
+                                    title += f" 🟢 {days_remaining} days left"
+
+                        with st.expander(title, expanded=(i <= 3)):
                             col1, col2 = st.columns(2)
 
                             with col1:
@@ -1359,9 +1458,31 @@ def render_import_section():
                                     st.markdown(f"**SUB:** {card.sub_reward}")
                                     st.markdown(f"- Spend: ${card.sub_spend_requirement}")
                                     st.markdown(f"- Period: {card.sub_time_period_days} days")
-                                    if card.sub_deadline:
-                                        st.markdown(f"- Deadline: {card.sub_deadline}")
+
+                                    # Show calculated or existing deadline
+                                    deadline = card.calculate_deadline()
+                                    if deadline:
+                                        days_remaining = card.get_days_remaining()
+                                        if days_remaining is not None:
+                                            if days_remaining < 0:
+                                                st.markdown(f"- Deadline: {deadline} ⚠️ **EXPIRED ({abs(days_remaining)} days ago)**")
+                                            elif days_remaining <= 30:
+                                                st.markdown(f"- Deadline: {deadline} 🔴 **URGENT ({days_remaining} days left)**")
+                                            elif days_remaining <= 60:
+                                                st.markdown(f"- Deadline: {deadline} 🟡 **Soon ({days_remaining} days left)**")
+                                            else:
+                                                st.markdown(f"- Deadline: {deadline} 🟢 ({days_remaining} days left)")
+                                        else:
+                                            st.markdown(f"- Deadline: {deadline}")
+                                    elif card.opened_date and card.sub_time_period_days:
+                                        st.info("💡 Auto-calculated deadline will be set on import")
+
                                     st.markdown(f"- Achieved: {'✓ Yes' if card.sub_achieved else '○ No'}")
+
+                                # Show auto-calculated annual fee date
+                                annual_fee_date = card.calculate_annual_fee_date()
+                                if annual_fee_date:
+                                    st.markdown(f"**Next Annual Fee:** {annual_fee_date}")
 
                             with col2:
                                 if card.benefits:
@@ -1403,6 +1524,105 @@ def render_import_section():
                             st.code(traceback.format_exc())
 
 
+def render_five_twenty_four_tab():
+    """Render the 5/24 tracking tab."""
+    st.header("Chase 5/24 Rule Tracker")
+
+    cards = st.session_state.storage.get_all_cards()
+
+    if not cards:
+        st.info("Add cards with opened dates to track your 5/24 status.")
+        return
+
+    # Calculate status
+    five_24 = calculate_five_twenty_four_status(cards)
+
+    # Status summary
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
+        if five_24["status"] == "under":
+            st.success(f"**{five_24['count']}/5**")
+            st.caption("You can apply for Chase cards")
+        elif five_24["status"] == "at":
+            st.warning(f"**{five_24['count']}/5**")
+            st.caption("At limit - risky to apply")
+        else:
+            st.error(f"**{five_24['count']}/5**")
+            st.caption("Over limit - will be denied")
+
+    with col2:
+        if five_24["next_drop_off"]:
+            st.metric("Next Card Drops", f"{five_24['days_until_drop']} days")
+            st.caption(f"On {five_24['next_drop_off']}")
+        else:
+            st.info("No cards in 24-month window")
+
+    with col3:
+        personal_count = len([c for c in cards if not c.is_business and c.opened_date])
+        business_count = len([c for c in cards if c.is_business and c.opened_date])
+        st.metric("Total Cards", personal_count + business_count)
+        st.caption(f"{personal_count} personal, {business_count} business")
+
+    st.divider()
+
+    # Explanation
+    with st.expander("What is the 5/24 rule?"):
+        st.markdown("""
+        **The Chase 5/24 Rule**: Chase will deny your application if you've opened **5 or more personal credit cards
+        from ANY issuer** in the past 24 months.
+
+        **What counts:**
+        - Personal credit cards from any bank
+        - Authorized user cards (can be removed from credit report)
+        - Store cards on major networks (Visa, MC, Amex, Discover)
+
+        **What doesn't count:**
+        - Business cards (EXCEPT Capital One, Discover, TD Bank)
+        - Closed cards (but opening date still matters)
+        - Charge cards (e.g., Amex Platinum)
+        - Denied applications
+
+        **Drop-off timing**: Cards drop off on the **first day of the 25th month** after opening.
+        Example: Card opened Jan 15, 2024 → drops off Feb 1, 2026.
+        """)
+
+    # Timeline of cards
+    st.subheader("5/24 Timeline")
+
+    timeline = get_five_twenty_four_timeline(cards)
+
+    if not timeline:
+        st.info("No cards currently counting toward 5/24.")
+        return
+
+    # Display timeline
+    for item in timeline:
+        card = item["card"]
+        drop_off = item["drop_off_date"]
+        days = item["days_until"]
+
+        display_name = get_display_name(card.name, card.issuer)
+        if card.nickname:
+            display_name = f"{card.nickname} ({display_name})"
+
+        # Color code by urgency
+        if days <= 30:
+            color = "#28a745"  # Green - drops soon
+        elif days <= 180:
+            color = "#ffc107"  # Yellow
+        else:
+            color = "#6c757d"  # Gray
+
+        st.markdown(
+            f"<div style='padding: 12px; margin: 8px 0; border-left: 4px solid {color}; background: #f8f9fa; border-radius: 4px;'>"
+            f"<span style='font-weight: 600;'>{display_name}</span><br>"
+            f"<span style='color: #6c757d; font-size: 0.9rem;'>Opened: {card.opened_date} | Drops off: {drop_off} ({days} days)</span>"
+            f"</div>",
+            unsafe_allow_html=True
+        )
+
+
 def main():
     """Main application entry point."""
     st.set_page_config(
@@ -1417,16 +1637,19 @@ def main():
     init_session_state()
     render_sidebar()
 
-    # Three main tabs - Dashboard is primary
-    tab1, tab2, tab3 = st.tabs(["Dashboard", "Add Card", "Import from Spreadsheet"])
+    # Four main tabs
+    tab1, tab2, tab3, tab4 = st.tabs(["Dashboard", "5/24 Tracker", "Add Card", "Import from Spreadsheet"])
 
     with tab1:
         render_dashboard()
 
     with tab2:
-        render_add_card_section()
+        render_five_twenty_four_tab()
 
     with tab3:
+        render_add_card_section()
+
+    with tab4:
         render_import_section()
 
 
