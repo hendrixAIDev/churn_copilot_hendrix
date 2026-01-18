@@ -11,6 +11,34 @@ from .models import CardData, Credit
 from .library import CardTemplate, CARD_LIBRARY
 from .normalize import normalize_issuer, simplify_card_name
 
+# Common card name abbreviations and variations
+CARD_ABBREVIATIONS = {
+    # Chase cards
+    "csp": "sapphire preferred",
+    "csr": "sapphire reserve",
+    "cfu": "freedom unlimited",
+    "cff": "freedom flex",
+    "cip": "ink preferred",
+    "cic": "ink cash",
+    "ciu": "ink unlimited",
+
+    # Amex cards
+    "plat": "platinum",
+    "amex plat": "platinum",
+    "bcp": "blue cash preferred",
+    "bce": "blue cash everyday",
+    "amex gold": "gold",
+    "amex green": "green",
+
+    # Capital One
+    "venture x": "venture x",
+    "savor one": "savorone",
+
+    # Other common abbreviations
+    "co": "capital one",
+    "boa": "bank of america",
+}
+
 
 class MatchResult:
     """Result of matching a card to a library template."""
@@ -31,6 +59,24 @@ class MatchResult:
         if self.template_id:
             return f"MatchResult(template_id='{self.template_id}', confidence={self.confidence:.2f})"
         return f"MatchResult(no match, confidence={self.confidence:.2f})"
+
+
+def _expand_abbreviations(text: str) -> str:
+    """Expand common card abbreviations in text.
+
+    Args:
+        text: Text that may contain abbreviations.
+
+    Returns:
+        Text with abbreviations expanded.
+    """
+    text_lower = text.lower()
+    for abbr, expansion in CARD_ABBREVIATIONS.items():
+        # Match whole words only
+        import re
+        pattern = r'\b' + re.escape(abbr) + r'\b'
+        text_lower = re.sub(pattern, expansion, text_lower)
+    return text_lower
 
 
 def match_to_library_with_confidence(
@@ -60,6 +106,10 @@ def match_to_library_with_confidence(
     issuer_normalized = normalize_issuer(issuer)
     name_simplified = simplify_card_name(name, issuer).lower()
 
+    # Expand abbreviations for better matching
+    name_expanded = _expand_abbreviations(name_lower)
+    name_simplified_expanded = _expand_abbreviations(name_simplified)
+
     best_match_id: str | None = None
     best_confidence = 0.0
     best_template: CardTemplate | None = None
@@ -76,7 +126,7 @@ def match_to_library_with_confidence(
         template_simplified = simplify_card_name(template.name, template.issuer).lower()
 
         # Exact match (confidence: 1.0)
-        if name_lower == template_name_lower:
+        if name_lower == template_name_lower or name_expanded == template_name_lower:
             return MatchResult(template_id, 1.0, template)
 
         # Simplified name exact match (confidence: 0.9)
@@ -86,11 +136,21 @@ def match_to_library_with_confidence(
                 best_confidence = 0.9
                 best_template = template
 
+        # Simplified with abbreviations expanded (confidence: 0.9)
+        if name_simplified_expanded and name_simplified_expanded == template_simplified:
+            if 0.9 > best_confidence:
+                best_match_id = template_id
+                best_confidence = 0.9
+                best_template = template
+
         # Key words match (confidence: 0.7-0.85)
         if template_simplified:
             key_words = template_simplified.split()
             if len(key_words) > 0:
-                matching_words = sum(1 for word in key_words if word in name_lower)
+                # Try matching against both original and expanded names
+                matching_words_original = sum(1 for word in key_words if word in name_lower)
+                matching_words_expanded = sum(1 for word in key_words if word in name_expanded)
+                matching_words = max(matching_words_original, matching_words_expanded)
                 word_match_ratio = matching_words / len(key_words)
 
                 if word_match_ratio >= 0.8:  # 80%+ key words match
