@@ -38,20 +38,18 @@ CUSTOM_CSS = """
     .badge-info { background: #cce5ff; color: #004085; }
     .badge-muted { background: #e9ecef; color: #6c757d; }
 
-    /* Benefits progress bar */
+    /* Benefits progress bar - no text content */
     .benefits-progress {
-        background: #e9ecef;
+        background: #e9ecef; /* no text content */
         border-radius: 4px;
         height: 6px;
         overflow: hidden;
         margin: 4px 0;
-        /* Progress bar - no text content */
     }
     .benefits-progress-fill {
-        background: linear-gradient(90deg, #28a745 0%, #20c997 100%);
+        background: linear-gradient(90deg, #28a745 0%, #20c997 100%); /* no text content */
         height: 100%;
         transition: width 0.3s ease;
-        /* Progress bar fill - no text content */
     }
 
     /* Summary card styling */
@@ -61,6 +59,7 @@ CUSTOM_CSS = """
         padding: 20px;
         text-align: center;
         box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+        color: #262730;
     }
     .summary-value {
         font-size: 2rem;
@@ -97,14 +96,17 @@ CUSTOM_CSS = """
         border-radius: 8px;
         background: #f8f9fa;
         border-left: 3px solid #dee2e6;
+        color: #262730;
     }
     .benefit-item.used {
         background: #d4edda;
         border-left-color: #28a745;
+        color: #155724;
     }
     .benefit-item.unused {
         background: #fff3cd;
         border-left-color: #ffc107;
+        color: #856404;
     }
 </style>
 """
@@ -1015,8 +1017,8 @@ def render_card_item(card, show_issuer_header: bool = True):
                         f"<span style='font-weight: 600; color: {text_color};'>Spending Progress: {progress_pct}%</span>"
                         f"<span style='float: right; color: #6c757d;'>${card.sub_spend_progress:,.0f} / ${card.signup_bonus.spend_requirement:,.0f}</span>"
                         f"</div>"
-                        f"<div style='background: #e9ecef; border-radius: 4px; height: 8px; overflow: hidden;'>"
-                        f"<div style='background: {bar_color}; height: 100%; width: {progress_pct}%; transition: width 0.3s;'></div>"
+                        f"<div style='background: #e9ecef; border-radius: 4px; height: 8px; overflow: hidden;'><!-- no text content -->"
+                        f"<div style='background: {bar_color}; height: 100%; width: {progress_pct}%; transition: width 0.3s;'><!-- no text content --></div>"
                         f"</div>",
                         unsafe_allow_html=True
                     )

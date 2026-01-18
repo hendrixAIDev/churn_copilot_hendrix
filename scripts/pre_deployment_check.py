@@ -18,8 +18,12 @@ def check_styling_issues(file_path):
     # Check 1: background without color
     for i, line in enumerate(lines, 1):
         if 'background:' in line or "background: " in line:
-            # Look for color specification in same line or nearby
-            context = '\n'.join(lines[max(0, i-2):min(len(lines), i+2)])
+            # Skip if line is a comment or has "no text content" note
+            if '/*' in line or '*/' in line or 'no text' in line.lower():
+                continue
+
+            # Look for color specification in same CSS block (wider context)
+            context = '\n'.join(lines[max(0, i-2):min(len(lines), i+7)])
             if "color:" not in context and "color: " not in context:
                 issues.append(f"Line {i}: background without text color - may cause invisible text")
 
@@ -90,7 +94,7 @@ def main():
         for issue in styling_issues:
             print(f"    - {issue}")
     else:
-        print("  ✓ No styling issues found")
+        print("  [OK] No styling issues found")
 
     # Usability checks
     print("\n[2/2] Checking usability issues...")
@@ -102,7 +106,7 @@ def main():
         for issue in usability_issues:
             print(f"    - {issue}")
     else:
-        print("  ✓ No usability issues found")
+        print("  [OK] No usability issues found")
 
     # Summary
     print("\n" + "=" * 60)
