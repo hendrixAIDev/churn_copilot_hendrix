@@ -1121,12 +1121,13 @@ def get_issuer_color(issuer: str) -> str:
     return colors.get(issuer, "#666666")
 
 
-def render_card_item(card, show_issuer_header: bool = True):
+def render_card_item(card, show_issuer_header: bool = True, selection_mode: bool = False):
     """Render a single card item with compact display.
 
     Args:
         card: Card object to render.
         show_issuer_header: Whether to show issuer (False when grouped by issuer).
+        selection_mode: Whether to show selection checkbox for bulk operations.
     """
     issuer_color = get_issuer_color(card.issuer)
 
@@ -1177,11 +1178,29 @@ def render_card_item(card, show_issuer_header: bool = True):
     badge_html = ' '.join([b[0] for b in status_badges[:3]])  # Limit to 3 badges
 
     with st.container():
-        # Main row: issuer | name | badges | fee | actions
-        if show_issuer_header:
-            header_col, badge_col, fee_col, expand_col, edit_col, del_col = st.columns([3.5, 2.5, 1, 0.5, 0.5, 0.5])
+        # Main row: [checkbox] | issuer | name | badges | fee | actions
+        if selection_mode:
+            if show_issuer_header:
+                select_col, header_col, badge_col, fee_col, expand_col, edit_col, del_col = st.columns([0.4, 3.1, 2.5, 1, 0.5, 0.5, 0.5])
+            else:
+                select_col, header_col, badge_col, fee_col, expand_col, edit_col, del_col = st.columns([0.4, 3.6, 2.5, 1, 0.5, 0.5, 0.5])
+
+            with select_col:
+                is_selected = st.checkbox(
+                    "",
+                    value=card.id in st.session_state.selected_cards,
+                    key=f"select_{card.id}",
+                    label_visibility="collapsed"
+                )
+                if is_selected:
+                    st.session_state.selected_cards.add(card.id)
+                else:
+                    st.session_state.selected_cards.discard(card.id)
         else:
-            header_col, badge_col, fee_col, expand_col, edit_col, del_col = st.columns([4, 2.5, 1, 0.5, 0.5, 0.5])
+            if show_issuer_header:
+                header_col, badge_col, fee_col, expand_col, edit_col, del_col = st.columns([3.5, 2.5, 1, 0.5, 0.5, 0.5])
+            else:
+                header_col, badge_col, fee_col, expand_col, edit_col, del_col = st.columns([4, 2.5, 1, 0.5, 0.5, 0.5])
 
         with header_col:
             if show_issuer_header:
@@ -1363,9 +1382,9 @@ def render_card_item(card, show_issuer_header: bool = True):
                 if card.annual_fee_date:
                     days_until_af = (card.annual_fee_date - date.today()).days
                     if days_until_af <= 30:
-                        st.error(f"AF Due: {card.annual_fee_date} ({days_until_af}d)")
+                        st.error(f"Annual Fee Due: {card.annual_fee_date} ({days_until_af}d)")
                     else:
-                        st.caption(f"AF Due: {card.annual_fee_date} ({days_until_af}d)")
+                        st.caption(f"Annual Fee Due: {card.annual_fee_date} ({days_until_af}d)")
 
                 if card.signup_bonus:
                     if card.sub_achieved:
@@ -1675,6 +1694,44 @@ def render_dashboard():
 
     st.divider()
 
+    # Bulk actions row
+    bulk_col1, bulk_col2, bulk_col3 = st.columns([1, 2, 5])
+
+    with bulk_col1:
+        selection_mode = st.checkbox("Select", key="selection_mode", help="Enable multi-select to delete multiple cards")
+
+    # Initialize selected cards in session state
+    if "selected_cards" not in st.session_state:
+        st.session_state.selected_cards = set()
+
+    with bulk_col2:
+        if selection_mode and st.session_state.selected_cards:
+            if st.button(f"Delete {len(st.session_state.selected_cards)} Selected", type="primary", use_container_width=True):
+                st.session_state.confirm_bulk_delete = True
+                st.rerun()
+
+    # Bulk delete confirmation
+    if st.session_state.get("confirm_bulk_delete", False):
+        st.warning(f"⚠️ Delete {len(st.session_state.selected_cards)} cards? This cannot be undone.")
+        confirm_col1, confirm_col2, confirm_col3 = st.columns([1, 1, 4])
+        with confirm_col1:
+            if st.button("Cancel", key="cancel_bulk_delete"):
+                st.session_state.confirm_bulk_delete = False
+                st.rerun()
+        with confirm_col2:
+            if st.button("Delete All", key="confirm_bulk_delete_btn", type="primary"):
+                # Delete all selected cards
+                for card_id in st.session_state.selected_cards:
+                    st.session_state.storage.delete_card(card_id)
+                st.session_state.selected_cards = set()
+                st.session_state.confirm_bulk_delete = False
+                st.success("Cards deleted successfully!")
+                st.rerun()
+
+    # Clear selection when exiting selection mode
+    if not selection_mode and st.session_state.selected_cards:
+        st.session_state.selected_cards = set()
+
     # Get current preferences
     prefs = st.session_state.prefs
 
@@ -1796,12 +1853,12 @@ def render_dashboard():
             )
             issuer_cards = [c for c in filtered_cards if c.issuer == issuer]
             for card in issuer_cards:
-                render_card_item(card, show_issuer_header=False)
+                render_card_item(card, show_issuer_header=False, selection_mode=selection_mode)
             st.write("")  # Space between groups
     else:
         # Flat list
         for card in filtered_cards:
-            render_card_item(card, show_issuer_header=True)
+            render_card_item(card, show_issuer_header=True, selection_mode=selection_mode)
 
 
 def render_action_required_tab():
@@ -1949,7 +2006,7 @@ def render_action_required_tab():
     # Section 3: Unused credits
     if unused_credits:
         st.subheader(f"Unused Credits ({len(unused_credits)})")
-        st.caption("Use these benefits to maximize value from your cards")
+        st.caption("Check off benefits as you use them - changes sync to Dashboard")
 
         # Group by card
         credits_by_card = {}
@@ -1961,9 +2018,45 @@ def render_action_required_tab():
 
         for card_name, credits in credits_by_card.items():
             total_value = sum(c["amount"] for c in credits)
-            with st.expander(f"{card_name} - ${total_value:.0f} available"):
+            with st.expander(f"{card_name} - ${total_value:.0f} available", expanded=True):
                 for credit in credits:
-                    st.markdown(f"- **{credit['credit_name']}**: ${credit['amount']:.0f} ({credit['frequency']})")
+                    # Get current period for display
+                    from src.core import get_current_period
+                    period = get_current_period(credit['frequency'])
+
+                    # Format period nicely for display
+                    if credit['frequency'].lower() == 'monthly':
+                        # "2026-01" -> "2026 Jan"
+                        year, month_num = period.split('-')
+                        month_names = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
+                                       "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+                        period_display = f"{year} {month_names[int(month_num) - 1]}"
+                    else:
+                        # "2024-Q1" -> "2024 Q1", "2024-H1" -> "2024 H1", "2024" -> "2024"
+                        period_display = period.replace('-', ' ')
+
+                    # Build display label with period
+                    benefit_label = f"{credit['credit_name']}: ${credit['amount']:.0f} ({credit['frequency']}) {period_display}"
+
+                    # Checkbox that marks the credit as used when checked
+                    checkbox_key = f"use_{credit['card'].id}_{credit['credit_name']}"
+                    is_checked = st.checkbox(
+                        benefit_label,
+                        value=False,
+                        key=checkbox_key
+                    )
+
+                    # If checkbox state changed to checked, mark credit as used
+                    if is_checked:
+                        from src.core import mark_credit_used
+                        new_usage = mark_credit_used(
+                            credit['credit_name'],
+                            credit['frequency'],
+                            credit['card'].credit_usage,
+                            date.today()
+                        )
+                        storage.update_card(credit['card'].id, {"credit_usage": new_usage})
+                        st.rerun()
 
     # Section 4: Missing data
     if missing_data:
