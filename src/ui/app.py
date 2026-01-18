@@ -2235,9 +2235,9 @@ def main():
         2. Select from library, extract from URL, or import a spreadsheet
 
         **What ChurnPilot tracks:**
+        - Benefit usage (Uber credits, hotel credits, etc.)
         - Signup bonus deadlines (don't miss out on points!)
         - Annual fee dates (call for retention offers in time)
-        - Benefit usage (Uber credits, hotel credits, etc.)
         - Chase 5/24 status (know when you can apply for more Chase cards)
         """)
 

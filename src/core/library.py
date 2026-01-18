@@ -29,7 +29,7 @@ CARD_LIBRARY: dict[str, CardTemplate] = {
         id="amex_platinum",
         name="American Express Platinum",
         issuer="American Express",
-        annual_fee=695,
+        annual_fee=895,
         credits=[
             Credit(name="Uber Credit", amount=15.0, frequency="monthly", notes="$35 in December"),
             Credit(name="Saks Fifth Avenue Credit", amount=50.0, frequency="semi-annually"),
