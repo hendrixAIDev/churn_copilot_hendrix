@@ -414,33 +414,49 @@ else:
 
 **Important considerations when using Streamlit:**
 
-### 1. st.rerun() Resets Tabs
+### 1. Tab Rendering Order (CRITICAL)
 
 **Problem:**
-- `st.rerun()` reruns entire app from top
-- Streamlit tabs default to first tab
-- No programmatic tab selection available
+- Streamlit renders ALL tab content in order on every rerun
+- Dashboard (tab 1) renders BEFORE Add Card (tab 3) processes button clicks
+- If button handler adds data, Dashboard already rendered with OLD data
 
-**Impact:**
-- User adds card in "Add Card" tab → `st.rerun()` → switches to "Dashboard" tab
-- Confusing UX - user has to navigate back
-
-**Solutions:**
+**Example of the Bug:**
 ```python
-# ❌ Bad: Forces tab switch
-st.success("Card added!")
-st.rerun()
-
-# ✓ Good: Let user navigate manually
-st.success("✓ Card added!")
-st.info("Switch to Dashboard tab to see your card")
-# No rerun - card will appear when user switches tabs
+# main() execution order on button click:
+1. render_dashboard()      # Reads cards - sees OLD data (card not added yet)
+2. render_add_card_tab()   # Button handler runs, adds card to session_state
+3. Script ends            # Dashboard already rendered with stale data!
 ```
 
-**Alternative Approaches:**
-- Use query parameters to maintain tab state
-- Use sidebar navigation instead of tabs
-- Minimize `st.rerun()` usage
+**Result:** User adds card, switches to Dashboard, card not there!
+
+**Solution:** MUST use `st.rerun()` after modifying data
+```python
+# ✓ Correct: Use st.rerun() after data modification
+card = storage.add_card_from_template(...)
+st.session_state.card_just_added = card.name  # Store for success message
+st.rerun()  # Forces fresh render with updated data
+
+# In render_dashboard():
+if st.session_state.get("card_just_added"):
+    st.success(f"✓ Added: {st.session_state.card_just_added}")
+    st.session_state.card_just_added = None
+```
+
+**Why This Works:**
+- `st.rerun()` causes fresh execution
+- On new run, session_state has updated data
+- Dashboard renders with correct data
+- Success message shows via session_state flag
+
+**Previous Wrong Approach:**
+```python
+# ❌ Bad: No rerun - card won't appear until NEXT interaction
+st.success("Card added!")
+st.info("Switch to Dashboard tab to see your card")
+# Data in session_state but Dashboard already rendered!
+```
 
 ### 2. Session State vs Persistent Storage
 
@@ -472,29 +488,67 @@ save_to_storage(cards)
 
 ### 3. JavaScript Evaluation Timing
 
-**Issue:** `streamlit-js-eval` can have timing issues
+**Issue:** `streamlit-js-eval` can return None due to timing issues
 
+**Root Cause:**
+- JavaScript runs asynchronously in browser
+- Streamlit Python continues execution
+- Result may not be ready when Python checks
+
+**Solution:** Use simple synchronous JavaScript (NOT Promises)
 ```python
-# ❌ Problematic: May return None due to timing
-result = streamlit_js_eval(js="localStorage.getItem('key')")
+# ❌ Bad: Promises don't work reliably with streamlit_js_eval
+js_code = """
+new Promise((resolve) => {
+    resolve(localStorage.getItem('key'));
+})
+"""
 
-# ✓ Better: Use Promise with timeout
+# ✓ Good: Simple synchronous IIFE
 js_code = """
 (function() {
-    return new Promise((resolve) => {
-        setTimeout(() => {
-            resolve(localStorage.getItem('key'));
-        }, 100);
-    });
+    try {
+        var data = localStorage.getItem('key');
+        if (data) return JSON.parse(data);
+        return [];
+    } catch (e) {
+        return [];
+    }
 })()
 """
-result = streamlit_js_eval(js=js_code, key=f"unique_key_{time.time()}")
+result = streamlit_js_eval(js=js_code, key="unique_static_key")
+```
+
+**For Saves:** Use `streamlit_js_eval` (more reliable than HTML injection)
+```python
+# ✓ Good: streamlit_js_eval for saves
+js_code = f"""
+(function() {{
+    localStorage.setItem('key', JSON.stringify({data}));
+    return true;
+}})()
+"""
+streamlit_js_eval(js=js_code, key=f"save_{time.time()}")
+```
+
+**Retry Logic for Loads:**
+```python
+# Handle None returns with retry
+if not st.session_state.storage_initialized:
+    if result is None:
+        st.session_state.storage_load_attempts += 1
+        if attempt >= 3:
+            st.session_state.storage_initialized = True  # Give up
+    else:
+        st.session_state.cards_data = result
+        st.session_state.storage_initialized = True
 ```
 
 **Requirements:**
 - Requires `pyarrow` to be installed
-- Need unique `key` parameter for each call to avoid caching
-- Handle None/null returns gracefully
+- Use SIMPLE synchronous JavaScript (no Promises)
+- Always update session_state FIRST before localStorage
+- Handle None/null returns with retry logic
 
 ### 4. Widget State Persistence
 
@@ -630,12 +684,70 @@ st.rerun()
    - Solve the actual problem, not hypothetical ones
    - Easier to add complexity than remove it
 
-4. **Framework quirks require attention**
-   - Streamlit's `st.rerun()` resets state
-   - Session state vs persistent storage
-   - JavaScript eval timing issues
+4. **Framework quirks require deep understanding**
+   - Streamlit tab rendering order affects data visibility
+   - `st.rerun()` is REQUIRED after data changes (not optional!)
+   - Session state updates are synchronous, but tab content already rendered
+   - JavaScript eval timing requires retry logic
 
 5. **Real user feedback is invaluable**
    - Users catch what developers miss
    - Test with real workflows
    - Listen to pain points
+
+6. **Understand root cause before fixing (January 2026)**
+   - Bug: "Card not appearing after add" - seemed like localStorage issue
+   - Root cause: Tab rendering order - Dashboard rendered BEFORE add handler ran
+   - Wrong fix: Avoid st.rerun() - made it worse!
+   - Right fix: USE st.rerun() + session state for success message
+   - Lesson: Trace execution order, don't assume
+
+7. **Test persistence end-to-end**
+   - Add card → appears immediately (session state)
+   - Close browser → reopen → card still there (localStorage)
+   - Both must work!
+
+---
+
+## Staff Engineer Mode
+
+**When user says "work on this for X hours" or "be a staff engineer":**
+
+This means the user wants autonomous, thorough work. Act as a senior engineer who:
+
+1. **Takes ownership of the problem**
+   - Don't ask for permission on small decisions
+   - Make architectural choices and document them
+   - Iterate until the problem is truly solved
+
+2. **Does deep investigation before fixing**
+   - Read the full architecture, not just the bug location
+   - Trace execution paths completely
+   - Understand WHY the bug exists, not just WHERE
+
+3. **Writes comprehensive tests**
+   - Tests should cover the exact bug scenario
+   - Include edge cases discovered during investigation
+   - Tests prevent regression
+
+4. **Documents lessons learned**
+   - Update CLAUDE.md with insights
+   - Future sessions benefit from documented knowledge
+   - Explain root cause, not just the fix
+
+5. **Commits incrementally with clear messages**
+   - Each commit should be atomic and reviewable
+   - Commit message explains what and why
+
+**Example Staff Engineer Workflow:**
+```
+1. User: "Fix this bug, work autonomously"
+2. Read full codebase architecture (not just bug file)
+3. Trace execution to understand data flow
+4. Identify root cause (not symptoms)
+5. Implement fix
+6. Write tests for the specific failure
+7. Update documentation with lessons
+8. Commit with detailed message
+9. Provide summary to user
+```

@@ -1,11 +1,14 @@
 """Browser-only storage for ChurnPilot web deployment.
 
-This is the CORRECT approach for web apps with pilot users:
+Architecture:
 - Data stored in user's browser (localStorage)
-- Each user has isolated data
-- Works on mobile, desktop, tablet
-- Survives app redeployments
-- No server-side files needed
+- Session state serves as in-memory cache
+- All operations update session state FIRST (immediate UI updates)
+- localStorage is updated asynchronously for persistence
+
+Key Insight: Streamlit tab rendering order means we must process
+operations BEFORE tabs render. This module provides the storage
+primitives; the UI layer handles operation timing.
 """
 
 import json
@@ -38,102 +41,141 @@ def _serialize_for_json(obj):
         return obj
 
 
-def init_web_storage():
-    """Initialize web storage - load data from browser localStorage ONLY.
+def _get_js_eval():
+    """Get streamlit_js_eval function, handling import errors."""
+    try:
+        from streamlit_js_eval import streamlit_js_eval
+        return streamlit_js_eval
+    except ImportError:
+        return None
 
-    This is the correct approach for web deployment with pilot users.
-    Data must be in the browser, not on the server.
+
+def init_web_storage():
+    """Initialize web storage - load data from browser localStorage.
+
+    This function:
+    1. Initializes session state variables
+    2. Attempts to load data from localStorage on first run
+    3. Sets up the storage_initialized flag to prevent repeated loads
+
+    IMPORTANT: Due to streamlit_js_eval timing, data may not be available
+    on the very first render. The UI should handle this gracefully.
     """
     # Initialize session state variables
     if "cards_data" not in st.session_state:
         st.session_state.cards_data = []
     if "storage_initialized" not in st.session_state:
         st.session_state.storage_initialized = False
+    if "storage_load_attempts" not in st.session_state:
+        st.session_state.storage_load_attempts = 0
 
-    # Always call streamlit_js_eval to keep component in DOM and avoid
-    # Streamlit tab state issues. Only process result on first load.
-    try:
-        from streamlit_js_eval import streamlit_js_eval
-
-        # Use SIMPLE synchronous JavaScript - no Promises
-        # streamlit_js_eval has issues with Promises
-        js_code = f"""
-        (function() {{
-            try {{
-                var data = localStorage.getItem('{STORAGE_KEY}');
-                if (data) {{
-                    return JSON.parse(data);
-                }}
-                return null;
-            }} catch (e) {{
-                console.error('[ChurnPilot] Load error:', e);
-                return null;
-            }}
-        }})()
-        """
-
-        # Always render the component with static key to maintain consistent state
-        result = streamlit_js_eval(js=js_code, key="churnpilot_load_storage")
-
-        # Only process the result on first load
-        if not st.session_state.storage_initialized:
-            if result is not None and isinstance(result, list):
-                st.session_state.cards_data = result
-                if len(result) > 0:
-                    st.toast(f"📱 Loaded {len(result)} cards from browser")
-            # Mark as initialized regardless of result
-            st.session_state.storage_initialized = True
-
-    except ImportError:
+    # Try to load from localStorage
+    js_eval = _get_js_eval()
+    if js_eval is None:
         if not st.session_state.storage_initialized:
             st.error("❌ streamlit-js-eval not installed. Run: `pip install streamlit-js-eval pyarrow`")
             st.session_state.storage_initialized = True
+        return
+
+    # Always render the component for consistent Streamlit state
+    # Use a unique key per attempt to avoid caching issues
+    attempt = st.session_state.storage_load_attempts
+
+    js_code = f"""
+    (function() {{
+        try {{
+            var data = localStorage.getItem('{STORAGE_KEY}');
+            if (data) {{
+                return JSON.parse(data);
+            }}
+            return [];
+        }} catch (e) {{
+            console.error('[ChurnPilot] Load error:', e);
+            return [];
+        }}
+    }})()
+    """
+
+    try:
+        result = js_eval(js=js_code, key=f"churnpilot_load_{attempt}")
+
+        # Only process on first successful load
+        if not st.session_state.storage_initialized:
+            if result is not None:
+                if isinstance(result, list):
+                    st.session_state.cards_data = result
+                    if len(result) > 0:
+                        st.toast(f"📱 Loaded {len(result)} cards from browser")
+                st.session_state.storage_initialized = True
+            else:
+                # streamlit_js_eval returned None - try again on next rerun
+                st.session_state.storage_load_attempts += 1
+                if attempt < 3:
+                    # Silently retry up to 3 times
+                    pass
+                else:
+                    # Give up after 3 attempts
+                    st.session_state.storage_initialized = True
+
     except Exception as e:
         if not st.session_state.storage_initialized:
             st.warning(f"⚠️ Could not load from browser storage: {e}")
             st.session_state.storage_initialized = True
 
 
-def save_web(cards_data: list[dict]):
-    """Save to browser localStorage ONLY.
+def save_to_localstorage(cards_data: list[dict]) -> bool:
+    """Save data to browser localStorage.
 
-    Uses a fire-and-forget approach for reliability.
-    Session state is always updated for immediate use.
+    Uses streamlit_js_eval for more reliable execution than HTML injection.
+    Returns True if save was attempted (we can't truly verify async success).
     """
-    # ALWAYS update session state first - this ensures the data is available immediately
-    st.session_state.cards_data = cards_data
-
     try:
-        # Serialize data
+        # Serialize and escape for JavaScript
         cards_json = json.dumps(_serialize_for_json(cards_data))
 
-        # Escape for JavaScript string
-        cards_json_escaped = cards_json.replace('\\', '\\\\').replace("'", "\\'").replace('\n', '\\n').replace('\r', '\\r')
+        js_eval = _get_js_eval()
+        if js_eval is None:
+            return False
 
-        # Use st.components.v1.html for fire-and-forget save
-        # This doesn't require a return value, making it more reliable
-        from streamlit.components.v1 import html
-
-        save_script = f"""
-        <script>
+        # Use streamlit_js_eval for the save - more reliable than HTML injection
+        js_code = f"""
         (function() {{
             try {{
-                var dataStr = '{cards_json_escaped}';
-                localStorage.setItem('{STORAGE_KEY}', dataStr);
-                console.log('[ChurnPilot] Saved', JSON.parse(dataStr).length, 'cards');
+                var data = {cards_json};
+                localStorage.setItem('{STORAGE_KEY}', JSON.stringify(data));
+                console.log('[ChurnPilot] Saved', data.length, 'cards to localStorage');
+                return true;
             }} catch (e) {{
                 console.error('[ChurnPilot] Save error:', e);
+                return false;
             }}
-        }})();
-        </script>
+        }})()
         """
 
-        # Inject the script - it will run silently
-        html(save_script, height=0, width=0)
+        # Use unique key to avoid caching
+        import time
+        result = js_eval(js=js_code, key=f"churnpilot_save_{time.time()}")
+
+        # Result might be None due to timing, but save still happens
+        return True
 
     except Exception as e:
-        # Log error but don't crash - session state is already updated
         print(f"[ChurnPilot] localStorage save error: {e}")
+        return False
+
+
+def save_web(cards_data: list[dict]):
+    """Save to browser localStorage.
+
+    ALWAYS updates session state first for immediate UI availability.
+    Then attempts to persist to localStorage.
+    """
+    # ALWAYS update session state first - this ensures the data is
+    # available immediately for the current session
+    st.session_state.cards_data = cards_data
+
+    # Then persist to localStorage for cross-session persistence
+    save_to_localstorage(cards_data)
 
 
 class WebStorage:
@@ -195,7 +237,8 @@ class WebStorage:
             created_at=datetime.now(),
         )
 
-        cards = self._load_cards()
+        # Make a copy to avoid mutation issues
+        cards = list(self._load_cards())
         cards.append(card.model_dump())
         self._save_cards(cards)
 
@@ -222,7 +265,8 @@ class WebStorage:
             created_at=datetime.now(),
         )
 
-        cards = self._load_cards()
+        # Make a copy to avoid mutation issues
+        cards = list(self._load_cards())
         cards.append(card.model_dump())
         self._save_cards(cards)
 
@@ -230,12 +274,12 @@ class WebStorage:
 
     def update_card(self, card_id: str, updates: dict) -> Card | None:
         """Update an existing card."""
-        cards = self._load_cards()
+        cards = list(self._load_cards())  # Copy
         serialized_updates = _serialize_for_json(updates)
 
         for i, card_data in enumerate(cards):
             if card_data.get("id") == card_id:
-                cards[i].update(serialized_updates)
+                cards[i] = {**card_data, **serialized_updates}
                 self._save_cards(cards)
                 return Card.model_validate(cards[i])
 

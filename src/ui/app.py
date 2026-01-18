@@ -454,10 +454,10 @@ def render_add_card_section():
                             opened_date=lib_opened_date,
                             signup_bonus=signup_bonus,
                         )
-                        st.success(f"✓ Added: {card.name}")
-                        # Don't st.rerun() - it resets to Dashboard tab
-                        # Card will appear in Dashboard when user switches tabs
-                        st.info("Switch to Dashboard tab to see your card")
+                        # Store success message to show on Dashboard after rerun
+                        st.session_state.card_just_added = card.name
+                        # Rerun to refresh the page - Dashboard will show the new card
+                        st.rerun()
                     except StorageError as e:
                         st.error(f"Failed: {e}")
 
@@ -860,8 +860,9 @@ def render_extraction_result():
                 # Update nickname if provided
                 if ext_nickname:
                     st.session_state.storage.update_card(card.id, {"nickname": ext_nickname})
-                st.success(f"Saved: {card.name}")
                 st.session_state.last_extraction = None
+                # Store success message to show on Dashboard after rerun
+                st.session_state.card_just_added = card.name
                 st.rerun()
             except StorageError as e:
                 st.error(f"Failed: {e}")
@@ -1627,6 +1628,11 @@ def export_cards_to_csv(cards):
 
 def render_dashboard():
     """Render the card dashboard with filtering, sorting, and grouping."""
+    # Show success message if card was just added (persists across rerun)
+    if st.session_state.get("card_just_added"):
+        st.success(f"✓ Added: {st.session_state.card_just_added}")
+        st.session_state.card_just_added = None  # Clear after showing
+
     col_header, col_export = st.columns([3, 1])
     with col_header:
         st.header("Your Cards")
