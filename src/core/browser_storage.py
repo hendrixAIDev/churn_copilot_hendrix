@@ -44,17 +44,22 @@ def init_browser_storage():
     if "cards_data" not in st.session_state:
         st.session_state.cards_data = []
         st.session_state.storage_initialized = False
+        print(f"[DEBUG] Initialized empty cards_data")
 
     # Only load from localStorage once per session
     if not st.session_state.storage_initialized:
+        print(f"[DEBUG] Loading from localStorage...")
         try:
             # Read from localStorage using streamlit-js-eval
             js_code = f"""
             (function() {{
                 try {{
                     const data = localStorage.getItem('{STORAGE_KEY}');
+                    console.log('[ChurnPilot] localStorage.getItem returned:', data ? data.substring(0, 100) : 'null');
                     if (data) {{
-                        return JSON.parse(data);
+                        const parsed = JSON.parse(data);
+                        console.log('[ChurnPilot] Parsed cards:', parsed.length);
+                        return parsed;
                     }}
                 }} catch (e) {{
                     console.error('[ChurnPilot] Failed to load from localStorage:', e);
@@ -65,42 +70,69 @@ def init_browser_storage():
 
             stored_data = streamlit_js_eval(js=js_code, key="load_storage")
 
+            print(f"[DEBUG] streamlit_js_eval returned: {type(stored_data)}, length: {len(stored_data) if isinstance(stored_data, list) else 'N/A'}")
+
             if stored_data and isinstance(stored_data, list):
                 st.session_state.cards_data = stored_data
                 st.session_state.storage_initialized = True
+                print(f"[DEBUG] Loaded {len(stored_data)} cards from localStorage")
+                st.success(f"✓ Loaded {len(stored_data)} cards from browser storage")
+            else:
+                st.session_state.storage_initialized = True
+                print(f"[DEBUG] No data in localStorage, starting fresh")
+                st.info("No saved cards found - starting fresh")
         except Exception as e:
             # If localStorage fails (e.g., in testing), just use empty list
             st.session_state.cards_data = []
             st.session_state.storage_initialized = True
+            print(f"[DEBUG] Exception loading from localStorage: {e}")
+            st.warning(f"Could not load from browser storage: {e}")
 
 
 def save_to_browser(cards_data: list[dict]):
     """Save cards data to browser localStorage."""
+    print(f"[DEBUG] save_to_browser called with {len(cards_data)} cards")
+
     # Update session state
     st.session_state.cards_data = cards_data
 
     # Serialize for JavaScript
     cards_json = json.dumps(_serialize_for_json(cards_data))
+    print(f"[DEBUG] Serialized to JSON, length: {len(cards_json)} characters")
 
     # JavaScript to save to localStorage
     js_code = f"""
     (function() {{
         try {{
-            localStorage.setItem('{STORAGE_KEY}', '{cards_json.replace("'", "\\'")}');
-            console.log('[ChurnPilot] Saved', JSON.parse('{cards_json.replace("'", "\\'")}').length, 'cards to localStorage');
-            return true;
+            const dataToSave = '{cards_json.replace("'", "\\'")}';
+            localStorage.setItem('{STORAGE_KEY}', dataToSave);
+
+            // Verify it was saved
+            const savedData = localStorage.getItem('{STORAGE_KEY}');
+            const parsed = JSON.parse(savedData);
+
+            console.log('[ChurnPilot] Saved', parsed.length, 'cards to localStorage');
+            console.log('[ChurnPilot] First card:', parsed[0] ? parsed[0].name : 'none');
+
+            return {{success: true, count: parsed.length}};
         }} catch (e) {{
             console.error('[ChurnPilot] Failed to save to localStorage:', e);
-            return false;
+            return {{success: false, error: e.message}};
         }}
     }})()
     """
 
     try:
-        streamlit_js_eval(js=js_code, key=f"save_storage_{len(cards_data)}")
-    except Exception:
+        result = streamlit_js_eval(js=js_code, key=f"save_storage_{len(cards_data)}_{hash(cards_json) % 10000}")
+        print(f"[DEBUG] Save result: {result}")
+        if result and isinstance(result, dict) and result.get('success'):
+            st.toast(f"✓ Saved {result.get('count', len(cards_data))} cards to browser")
+        elif result:
+            st.warning(f"Save may have failed: {result}")
+    except Exception as e:
         # If JavaScript eval fails, data is still in session state
-        pass
+        print(f"[DEBUG] Exception during save: {e}")
+        st.warning(f"Could not save to browser storage: {e}")
 
 
 class BrowserStorage:
