@@ -1524,6 +1524,181 @@ def render_import_section():
                             st.code(traceback.format_exc())
 
 
+def render_action_required_tab():
+    """Render the Action Required tab showing urgent items."""
+    st.header("Action Required")
+
+    storage = CardStorage()
+    cards = storage.get_all_cards()
+
+    if not cards:
+        st.info("No cards yet. Add cards to see action items.")
+        return
+
+    today = date.today()
+
+    # Collect urgent items
+    urgent_subs = []
+    upcoming_fees = []
+    unused_credits = []
+    missing_data = []
+
+    for card in cards:
+        display_name = get_display_name(card.name, card.issuer)
+        if card.nickname:
+            display_name = f"{card.nickname} ({display_name})"
+
+        # Check SUB deadlines
+        if card.signup_bonus and card.signup_bonus.deadline and not card.sub_achieved:
+            days_left = (card.signup_bonus.deadline - today).days
+            if days_left <= 30:
+                urgent_subs.append({
+                    "card": card,
+                    "display_name": display_name,
+                    "days_left": days_left,
+                    "deadline": card.signup_bonus.deadline,
+                    "requirement": card.signup_bonus.spend_requirement,
+                    "reward": card.signup_bonus.points_or_cash
+                })
+
+        # Check annual fees
+        if card.annual_fee > 0 and card.annual_fee_date:
+            try:
+                fee_date = datetime.strptime(card.annual_fee_date, "%Y-%m-%d").date()
+                days_until = (fee_date - today).days
+                if 0 <= days_until <= 60:
+                    upcoming_fees.append({
+                        "card": card,
+                        "display_name": display_name,
+                        "days_until": days_until,
+                        "fee_date": fee_date,
+                        "amount": card.annual_fee
+                    })
+            except:
+                pass
+
+        # Check unused credits
+        for credit in card.credits:
+            if credit.amount > 0:
+                period = get_current_period(credit.frequency)
+                is_used = card.credit_usage.get(credit.name, {}).get(period, False)
+                if not is_used:
+                    unused_credits.append({
+                        "card": card,
+                        "display_name": display_name,
+                        "credit_name": credit.name,
+                        "amount": credit.amount,
+                        "frequency": credit.frequency
+                    })
+
+        # Check missing opened_date (blocks 5/24 tracking)
+        if not card.opened_date and not card.closed_date:
+            missing_data.append({
+                "card": card,
+                "display_name": display_name
+            })
+
+    # Display urgent items
+    total_items = len(urgent_subs) + len(upcoming_fees) + len(unused_credits) + len(missing_data)
+
+    if total_items == 0:
+        st.success("All clear! No urgent action items.")
+        return
+
+    st.info(f"{total_items} items need attention")
+
+    # Section 1: Urgent SUB deadlines (< 30 days)
+    if urgent_subs:
+        st.subheader(f"Signup Bonuses ({len(urgent_subs)})")
+        st.caption("Complete minimum spend before deadline to earn bonus")
+
+        urgent_subs.sort(key=lambda x: x["days_left"])
+
+        for item in urgent_subs:
+            days = item["days_left"]
+            if days < 0:
+                urgency = "EXPIRED"
+                color = "#dc3545"
+            elif days <= 7:
+                urgency = "URGENT"
+                color = "#dc3545"
+            elif days <= 14:
+                urgency = "SOON"
+                color = "#fd7e14"
+            else:
+                urgency = "ATTENTION"
+                color = "#ffc107"
+
+            st.markdown(
+                f"<div style='padding: 12px; margin: 8px 0; border-left: 4px solid {color}; background: #f8f9fa; border-radius: 4px;'>"
+                f"<span style='font-weight: 600;'>[{urgency}] {item['display_name']}</span><br>"
+                f"<span style='color: #6c757d; font-size: 0.9rem;'>"
+                f"Deadline: {item['deadline']} ({days} days) | "
+                f"Requirement: ${item['requirement']:,.0f} | "
+                f"Reward: {item['reward']}"
+                f"</span>"
+                f"</div>",
+                unsafe_allow_html=True
+            )
+
+    # Section 2: Upcoming annual fees
+    if upcoming_fees:
+        st.subheader(f"Annual Fees ({len(upcoming_fees)})")
+        st.caption("Consider calling for retention offers or canceling before fee posts")
+
+        upcoming_fees.sort(key=lambda x: x["days_until"])
+
+        for item in upcoming_fees:
+            days = item["days_until"]
+            if days <= 14:
+                color = "#dc3545"
+            elif days <= 30:
+                color = "#fd7e14"
+            else:
+                color = "#ffc107"
+
+            st.markdown(
+                f"<div style='padding: 12px; margin: 8px 0; border-left: 4px solid {color}; background: #f8f9fa; border-radius: 4px;'>"
+                f"<span style='font-weight: 600;'>{item['display_name']}</span><br>"
+                f"<span style='color: #6c757d; font-size: 0.9rem;'>"
+                f"Fee: ${item['amount']:.0f} | Due: {item['fee_date']} ({days} days)"
+                f"</span>"
+                f"</div>",
+                unsafe_allow_html=True
+            )
+
+    # Section 3: Unused credits
+    if unused_credits:
+        st.subheader(f"Unused Credits ({len(unused_credits)})")
+        st.caption("Use these benefits to maximize value from your cards")
+
+        # Group by card
+        credits_by_card = {}
+        for item in unused_credits:
+            card_name = item["display_name"]
+            if card_name not in credits_by_card:
+                credits_by_card[card_name] = []
+            credits_by_card[card_name].append(item)
+
+        for card_name, credits in credits_by_card.items():
+            total_value = sum(c["amount"] for c in credits)
+            with st.expander(f"{card_name} - ${total_value:.0f} available"):
+                for credit in credits:
+                    st.markdown(f"- **{credit['credit_name']}**: ${credit['amount']:.0f} ({credit['frequency']})")
+
+    # Section 4: Missing data
+    if missing_data:
+        st.subheader(f"Missing Data ({len(missing_data)})")
+        st.caption("Add opened dates to enable 5/24 tracking and deadline calculations")
+
+        for item in missing_data:
+            st.markdown(
+                f"<div style='padding: 8px; margin: 4px 0; border-left: 3px solid #6c757d; background: #f8f9fa; border-radius: 4px;'>"
+                f"<span style='font-weight: 500;'>{item['display_name']}</span> - No opened date"
+                f"</div>",
+                unsafe_allow_html=True
+            )
+
 def render_five_twenty_four_tab():
     """Render the 5/24 tracking tab."""
     st.header("Chase 5/24 Rule Tracker")
@@ -1637,19 +1812,22 @@ def main():
     init_session_state()
     render_sidebar()
 
-    # Four main tabs
-    tab1, tab2, tab3, tab4 = st.tabs(["Dashboard", "5/24 Tracker", "Add Card", "Import from Spreadsheet"])
+    # Five main tabs
+    tab1, tab2, tab3, tab4, tab5 = st.tabs(["Dashboard", "Action Required", "5/24 Tracker", "Add Card", "Import from Spreadsheet"])
 
     with tab1:
         render_dashboard()
 
     with tab2:
-        render_five_twenty_four_tab()
+        render_action_required_tab()
 
     with tab3:
-        render_add_card_section()
+        render_five_twenty_four_tab()
 
     with tab4:
+        render_add_card_section()
+
+    with tab5:
         render_import_section()
 
 
