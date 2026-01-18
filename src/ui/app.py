@@ -802,6 +802,22 @@ def render_card_edit_form(card, editing_key: str):
 
         with btn_col1:
             if st.button("Save", key=f"save_{card.id}", type="primary"):
+                # Validate inputs before saving
+                validation_results = []
+                validation_results.append(validate_opened_date(new_opened_date))
+                validation_results.append(validate_opened_date(new_af_date))  # Annual fee date should also not be in past inappropriately
+
+                # Show errors (blocking)
+                if has_errors(validation_results):
+                    for error_msg in get_error_messages(validation_results):
+                        st.error(error_msg)
+                    st.stop()
+
+                # Show warnings (non-blocking)
+                if has_warnings(validation_results):
+                    for warning_msg in get_warning_messages(validation_results):
+                        st.warning(warning_msg)
+
                 # Build updates dict
                 updates = {}
                 if new_nickname != (card.nickname or ""):
