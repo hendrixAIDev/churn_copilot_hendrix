@@ -1077,15 +1077,96 @@ def render_empty_filter_results(issuer_filter: str, search_query: str):
     st.caption("Try adjusting your filters or search term.")
 
 
+def export_cards_to_csv(cards):
+    """Export cards to CSV format.
+
+    Args:
+        cards: List of Card objects to export
+
+    Returns:
+        CSV string ready for download
+    """
+    import csv
+    import io
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+
+    # CSV header
+    writer.writerow([
+        "Card Name",
+        "Issuer",
+        "Nickname",
+        "Annual Fee",
+        "Opened Date",
+        "Annual Fee Date",
+        "Is Business",
+        "Closed Date",
+        "SUB Reward",
+        "SUB Spend Requirement",
+        "SUB Deadline",
+        "SUB Achieved",
+        "Credits (Name: Amount, Frequency)",
+        "Notes"
+    ])
+
+    # Data rows
+    for card in cards:
+        # Format credits
+        credits_str = "; ".join([
+            f"{c.name}: ${c.amount}, {c.frequency}"
+            for c in card.credits
+        ]) if card.credits else ""
+
+        # Format SUB info
+        sub_reward = card.signup_bonus.points_or_cash if card.signup_bonus else ""
+        sub_requirement = card.signup_bonus.spend_requirement if card.signup_bonus else ""
+        sub_deadline = card.signup_bonus.deadline if card.signup_bonus else ""
+
+        writer.writerow([
+            card.name,
+            card.issuer,
+            card.nickname or "",
+            card.annual_fee,
+            card.opened_date or "",
+            card.annual_fee_date or "",
+            "Yes" if card.is_business else "No",
+            card.closed_date or "",
+            sub_reward,
+            sub_requirement,
+            sub_deadline,
+            "Yes" if card.sub_achieved else "No",
+            credits_str,
+            card.notes or ""
+        ])
+
+    return output.getvalue()
+
+
 def render_dashboard():
     """Render the card dashboard with filtering, sorting, and grouping."""
-    st.header("Your Cards")
+    col_header, col_export = st.columns([3, 1])
+    with col_header:
+        st.header("Your Cards")
+    with col_export:
+        st.write("")  # Spacing
 
     cards = st.session_state.storage.get_all_cards()
 
     if not cards:
         render_empty_dashboard()
         return
+
+    # Export button in the column
+    with col_export:
+        csv_data = export_cards_to_csv(cards)
+        st.download_button(
+            label="Export to CSV",
+            data=csv_data,
+            file_name=f"churnpilot_cards_{date.today()}.csv",
+            mime="text/csv",
+            help="Download all cards as CSV spreadsheet"
+        )
 
     # Calculate comprehensive metrics
     total_fees = sum(c.annual_fee for c in cards)
