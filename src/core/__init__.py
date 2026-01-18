@@ -39,6 +39,9 @@ from .enrichment import (
     get_enrichment_summary,
     should_enrich_card,
     MatchResult,
+    enrich_existing_card,
+    batch_enrich_cards,
+    BatchEnrichmentResult,
 )
 
 __all__ = [
@@ -105,4 +108,7 @@ __all__ = [
     "get_enrichment_summary",
     "should_enrich_card",
     "MatchResult",
+    "enrich_existing_card",
+    "batch_enrich_cards",
+    "BatchEnrichmentResult",
 ]

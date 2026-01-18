@@ -279,3 +279,108 @@ def should_enrich_card(name: str, issuer: str, min_confidence: float = 0.7) -> b
     """
     match_result = match_to_library_with_confidence(name, issuer, min_confidence)
     return match_result.template is not None and match_result.template_id is not None
+
+
+def enrich_existing_card(card, min_confidence: float = 0.7):
+    """Enrich an existing Card object with library data.
+
+    Args:
+        card: Card object (from models.Card, not CardData).
+        min_confidence: Minimum confidence for enrichment.
+
+    Returns:
+        Tuple of (enriched_card, credits_added, match_result).
+        If no match, returns original card with 0 credits added.
+    """
+    # Import here to avoid circular imports
+    from .models import Card
+
+    # Match to library
+    match_result = match_to_library_with_confidence(
+        card.name,
+        card.issuer,
+        min_confidence=min_confidence,
+    )
+
+    # If no match, return original
+    if not match_result.template or not match_result.template_id:
+        return (card, 0, match_result)
+
+    # Get existing credit names (case-insensitive)
+    existing_names = {credit.name.lower() for credit in card.credits}
+
+    # Find credits to add from template
+    credits_to_add = []
+    for template_credit in match_result.template.credits:
+        if template_credit.name.lower() not in existing_names:
+            credits_to_add.append(template_credit.model_copy())
+
+    # If no credits to add, return original
+    if not credits_to_add:
+        return (card, 0, match_result)
+
+    # Create enriched card
+    enriched_card = card.model_copy(deep=True)
+    enriched_card.credits.extend(credits_to_add)
+    enriched_card.template_id = match_result.template_id
+
+    return (enriched_card, len(credits_to_add), match_result)
+
+
+class BatchEnrichmentResult:
+    """Result of batch enrichment operation."""
+
+    def __init__(self):
+        self.total_cards = 0
+        self.enriched_count = 0
+        self.credits_added_total = 0
+        self.matches: list[tuple[str, str, int]] = []  # (card_name, template_id, credits_added)
+        self.no_match: list[str] = []  # card names with no match
+
+    def add_result(self, card_name: str, template_id: str | None, credits_added: int):
+        """Add a single card enrichment result."""
+        self.total_cards += 1
+        if template_id and credits_added > 0:
+            self.enriched_count += 1
+            self.credits_added_total += credits_added
+            self.matches.append((card_name, template_id, credits_added))
+        elif not template_id:
+            self.no_match.append(card_name)
+
+    def get_summary(self) -> str:
+        """Get human-readable summary."""
+        if self.enriched_count == 0:
+            return f"Scanned {self.total_cards} cards, no enrichment needed"
+
+        return (
+            f"Enriched {self.enriched_count}/{self.total_cards} cards, "
+            f"added {self.credits_added_total} credits total"
+        )
+
+
+def batch_enrich_cards(cards: list, min_confidence: float = 0.7) -> tuple[list, BatchEnrichmentResult]:
+    """Enrich multiple cards from library templates.
+
+    Args:
+        cards: List of Card objects to enrich.
+        min_confidence: Minimum confidence threshold.
+
+    Returns:
+        Tuple of (enriched_cards, batch_result).
+        enriched_cards: List of Card objects (enriched if possible, original if not).
+        batch_result: BatchEnrichmentResult with statistics.
+    """
+    enriched_cards = []
+    result = BatchEnrichmentResult()
+
+    for card in cards:
+        enriched_card, credits_added, match_result = enrich_existing_card(card, min_confidence)
+        enriched_cards.append(enriched_card)
+
+        result.add_result(
+            card.name,
+            match_result.template_id if match_result else None,
+            credits_added
+        )
+
+    return (enriched_cards, result)
