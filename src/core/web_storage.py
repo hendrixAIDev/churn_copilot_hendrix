@@ -41,15 +41,6 @@ def _serialize_for_json(obj):
         return obj
 
 
-def _get_js_eval():
-    """Get streamlit_js_eval function, handling import errors."""
-    try:
-        from streamlit_js_eval import streamlit_js_eval
-        return streamlit_js_eval
-    except ImportError:
-        return None
-
-
 def init_web_storage():
     """Initialize web storage - load data from browser localStorage.
 
@@ -70,42 +61,32 @@ def init_web_storage():
         st.session_state.storage_load_attempts = 0
 
     # Try to load from localStorage
-    js_eval = _get_js_eval()
-    if js_eval is None:
+    try:
+        from streamlit_js_eval import get_local_storage
+    except ImportError:
         if not st.session_state.storage_initialized:
             st.error("❌ streamlit-js-eval not installed. Run: `pip install streamlit-js-eval pyarrow`")
             st.session_state.storage_initialized = True
         return
 
-    # Always render the component for consistent Streamlit state
     # Use a unique key per attempt to avoid caching issues
     attempt = st.session_state.storage_load_attempts
 
-    js_code = f"""
-    (function() {{
-        try {{
-            var data = localStorage.getItem('{STORAGE_KEY}');
-            if (data) {{
-                return JSON.parse(data);
-            }}
-            return [];
-        }} catch (e) {{
-            console.error('[ChurnPilot] Load error:', e);
-            return [];
-        }}
-    }})()
-    """
-
     try:
-        result = js_eval(js=js_code, key=f"churnpilot_load_{attempt}")
+        # Use the library's built-in get_local_storage function
+        result_str = get_local_storage(STORAGE_KEY, component_key=f"churnpilot_load_{attempt}")
 
         # Only process on first successful load
         if not st.session_state.storage_initialized:
-            if result is not None:
-                if isinstance(result, list):
-                    st.session_state.cards_data = result
-                    if len(result) > 0:
-                        st.toast(f"📱 Loaded {len(result)} cards from browser")
+            if result_str is not None:
+                try:
+                    result = json.loads(result_str) if result_str else []
+                    if isinstance(result, list):
+                        st.session_state.cards_data = result
+                        if len(result) > 0:
+                            st.toast(f"📱 Loaded {len(result)} cards from browser")
+                except json.JSONDecodeError:
+                    st.session_state.cards_data = []
                 st.session_state.storage_initialized = True
             else:
                 # streamlit_js_eval returned None - try again on next rerun
@@ -126,37 +107,30 @@ def init_web_storage():
 def save_to_localstorage(cards_data: list[dict]) -> bool:
     """Save data to browser localStorage.
 
-    Uses streamlit_js_eval for more reliable execution than HTML injection.
-    Returns True if save was attempted (we can't truly verify async success).
+    Uses the streamlit-js-eval library's built-in set_local_storage function.
+    Returns True if save was attempted.
     """
     try:
-        # Serialize and escape for JavaScript
+        from streamlit_js_eval import set_local_storage
+    except ImportError:
+        print("[ChurnPilot] streamlit-js-eval not installed")
+        return False
+
+    try:
+        # Serialize data to JSON string
         cards_json = json.dumps(_serialize_for_json(cards_data))
-
-        js_eval = _get_js_eval()
-        if js_eval is None:
-            return False
-
-        # Use streamlit_js_eval for the save - more reliable than HTML injection
-        js_code = f"""
-        (function() {{
-            try {{
-                var data = {cards_json};
-                localStorage.setItem('{STORAGE_KEY}', JSON.stringify(data));
-                console.log('[ChurnPilot] Saved', data.length, 'cards to localStorage');
-                return true;
-            }} catch (e) {{
-                console.error('[ChurnPilot] Save error:', e);
-                return false;
-            }}
-        }})()
-        """
 
         # Use unique key to avoid caching
         import time
-        result = js_eval(js=js_code, key=f"churnpilot_save_{time.time()}")
+        component_key = f"churnpilot_save_{int(time.time() * 1000)}"
 
-        # Result might be None due to timing, but save still happens
+        # Use the library's built-in set_local_storage function
+        # Note: set_local_storage expects the value as a string
+        result = set_local_storage(STORAGE_KEY, cards_json, component_key=component_key)
+
+        # Log for debugging
+        print(f"[ChurnPilot] Save attempted, result: {result}")
+
         return True
 
     except Exception as e:

@@ -621,6 +621,56 @@ st.rerun()
 
 **Solution:** Always do user-facing testing (see workflow above)
 
+---
+
+## ⛔ MANDATORY VERIFICATION CHECKPOINT
+
+**STOP! Before reporting any feature as "done" or "fixed", you MUST complete this checklist.**
+
+This is NOT optional. Unit tests are INSUFFICIENT for browser-dependent features.
+
+### For ANY localStorage/Browser Feature:
+
+```bash
+# 1. Start the app
+streamlit run src/ui/app.py
+
+# 2. Open browser developer tools (F12)
+# 3. Go to Console tab - watch for errors
+# 4. Go to Application tab > Local Storage > localhost:8501
+```
+
+**Then perform these tests:**
+
+| Test | Action | Expected | Verified? |
+|------|--------|----------|-----------|
+| Add card | Add card from library | Card appears in Dashboard | [ ] |
+| Check localStorage | F12 > Application > Local Storage | `churnpilot_cards` key exists with data | [ ] |
+| Check console | F12 > Console | "[ChurnPilot] Saved X cards" message | [ ] |
+| Refresh test | F5 to refresh page | Card still there, toast shows "Loaded X cards" | [ ] |
+| Close/reopen | Close browser, reopen localhost:8501 | Card still there | [ ] |
+
+**If ANY checkbox is not verified, the feature is NOT done.**
+
+### Why Unit Tests Are Insufficient
+
+Unit tests with mocked `streamlit_js_eval`:
+- ✅ Verify Python logic is correct
+- ✅ Verify function calls happen
+- ❌ Do NOT verify JavaScript executes in browser
+- ❌ Do NOT verify localStorage actually persists
+- ❌ Do NOT verify data survives browser restart
+
+**The only way to verify browser persistence is to test in an actual browser.**
+
+### What To Do If You Can't Run Browser Tests
+
+If running in an environment without browser access:
+1. **Be explicit:** "Unit tests pass but browser verification NOT done"
+2. **Provide exact steps** for user to verify
+3. **Do NOT claim the feature works** until user confirms
+4. **Create diagnostic tools** that user can run to verify
+
 ### Pitfall 2: Wrong Deployment Context
 
 **Symptom:** Works on localhost, breaks in production
