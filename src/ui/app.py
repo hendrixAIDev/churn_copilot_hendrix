@@ -460,14 +460,13 @@ def render_add_card_section():
                             opened_date=lib_opened_date,
                             signup_bonus=signup_bonus,
                         )
+                        # CRITICAL: Save IMMEDIATELY after adding card
+                        # This ensures data is saved even if user navigates away quickly
+                        sync_to_localstorage()
                         # Show immediate success feedback via toast
                         st.toast(f"✓ Added: {card.name}", icon="✅")
                         # Store success for additional confirmation at top of Add Card section
                         st.session_state.card_add_success = card.name
-                        # CRITICAL: Don't call st.rerun() here!
-                        # st.rerun() would destroy the save component before JS executes.
-                        # The save component created by sync_to_localstorage() at the
-                        # end of this render will execute when the page completes.
                         st.success(f"✓ Card added! Navigate to Dashboard to view.")
                     except StorageError as e:
                         st.error(f"Failed: {e}")
@@ -713,10 +712,11 @@ def render_add_card_section():
                             importer = SpreadsheetImporter()
                             imported = importer.import_cards(st.session_state.parsed_import)
 
+                            # Save immediately
+                            sync_to_localstorage()
                             st.success(f"✓ Successfully imported {len(imported)} cards! Navigate to Dashboard to view.")
                             st.session_state.parsed_import = None
                             st.balloons()
-                            # Don't rerun - let save complete
                         except Exception as e:
                             st.error(f"Import failed: {e}")
                             import traceback
@@ -873,10 +873,11 @@ def render_extraction_result():
                     st.session_state.storage.update_card(card.id, {"nickname": ext_nickname})
                 st.session_state.last_extraction = None
                 # Show immediate success feedback via toast
+                # Save immediately
+                sync_to_localstorage()
                 st.toast(f"✓ Added: {card.name}", icon="✅")
                 # Store success for additional confirmation at top of Add Card section
                 st.session_state.card_add_success = card.name
-                # Don't rerun - let save complete
                 st.success(f"✓ Card added! Navigate to Dashboard to view.")
             except StorageError as e:
                 st.error(f"Failed: {e}")
@@ -1011,8 +1012,8 @@ def render_card_edit_form(card, editing_key: str):
                     )
                     updated_offers = list(card.retention_offers) + [new_offer]
                     st.session_state.storage.update_card(card.id, {"retention_offers": updated_offers})
+                    sync_to_localstorage()
                     st.success("✓ Retention offer added!")
-                    # Don't rerun - let save complete
                 else:
                     st.error("Please enter offer details")
 
@@ -1074,8 +1075,8 @@ def render_card_edit_form(card, editing_key: str):
                     )
                     updated_history = list(card.product_change_history) + [new_pc]
                     st.session_state.storage.update_card(card.id, {"product_change_history": updated_history})
+                    sync_to_localstorage()
                     st.success("✓ Product change recorded!")
-                    # Don't rerun - let save complete
                 else:
                     st.error("Please enter both from and to product names")
 
@@ -1136,12 +1137,12 @@ def render_card_edit_form(card, editing_key: str):
 
                 if updates:
                     st.session_state.storage.update_card(card.id, updates)
+                    sync_to_localstorage()
                     st.success("✓ Changes saved!")
                 else:
                     st.info("No changes to save")
 
                 st.session_state[editing_key] = False
-                # Don't rerun - let save complete. Edit form closes on next interaction.
 
         with btn_col2:
             if st.button("Cancel", key=f"cancel_{card.id}"):
@@ -1299,9 +1300,9 @@ def render_card_item(card, show_issuer_header: bool = True, selection_mode: bool
             with confirm_col:
                 if st.button("Delete", key=f"confirm_del_{card.id}", type="primary"):
                     st.session_state.storage.delete_card(card.id)
+                    sync_to_localstorage()
                     st.session_state[confirm_key] = False
                     st.success("✓ Card deleted!")
-                    # Don't rerun - let save complete
             return
 
         # Edit form
@@ -1383,8 +1384,8 @@ def render_card_item(card, show_issuer_header: bool = True, selection_mode: bool
             with sub_col2:
                 if st.button("✓ Complete", key=f"sub_complete_{card.id}", help="Mark signup bonus as achieved", use_container_width=True):
                     st.session_state.storage.update_card(card.id, {"sub_achieved": True})
+                    sync_to_localstorage()
                     st.toast("✓ Signup bonus marked complete!", icon="🎉")
-                    # Don't rerun - let save complete
 
         # Show unused benefits indicator (preview row)
         if unused_benefits > 0 and not is_all_snoozed:
@@ -1401,8 +1402,8 @@ def render_card_item(card, show_issuer_header: bool = True, selection_mode: bool
                 if st.button("Dismiss", key=f"snooze_all_{card.id}", help="Snooze reminders for 30 days", use_container_width=True):
                     snooze_until = date.today() + timedelta(days=30)
                     st.session_state.storage.update_card(card.id, {"benefits_reminder_snoozed_until": snooze_until})
+                    sync_to_localstorage()
                     st.toast("Reminders snoozed for 30 days", icon="🔕")
-                    # Don't rerun - let save complete
         elif is_all_snoozed:
             # Show option to unsnooze
             days_until_unsnooze = (card.benefits_reminder_snoozed_until - date.today()).days
@@ -1417,8 +1418,8 @@ def render_card_item(card, show_issuer_header: bool = True, selection_mode: bool
             with unsnooze_col2:
                 if st.button("Restore", key=f"unsnooze_{card.id}", help="Show benefit reminders again", use_container_width=True):
                     st.session_state.storage.update_card(card.id, {"benefits_reminder_snoozed_until": None})
+                    sync_to_localstorage()
                     st.toast("Reminders restored", icon="🔔")
-                    # Don't rerun - let save complete
 
         # Expanded details (only show when expanded)
         if is_expanded:
@@ -1512,7 +1513,7 @@ def render_card_item(card, show_issuer_header: bool = True, selection_mode: bool
                                 new_usage = mark_credit_unused(credit.name, new_usage)
                             # Save to storage
                             st.session_state.storage.update_card(card.id, {"credit_usage": new_usage})
-                            # Don't rerun - let save complete
+                            sync_to_localstorage()
 
                         st.caption(f"↻ Resets: {period_name}")
                         st.markdown("<div style='margin-bottom: 8px;'></div>", unsafe_allow_html=True)
@@ -1900,8 +1901,8 @@ def render_dashboard():
                     st.session_state.storage.delete_card(card_id)
                 st.session_state.selected_cards = set()
                 st.session_state.confirm_bulk_delete = False
+                sync_to_localstorage()
                 st.success("✓ Cards deleted!")
-                # Don't rerun - let save complete
 
     st.divider()
 
@@ -2125,8 +2126,8 @@ def render_action_required_tab():
                             date.today()
                         )
                         storage.update_card(credit['card'].id, {"credit_usage": new_usage})
+                        sync_to_localstorage()
                         st.toast("✓ Credit marked as used!", icon="✅")
-                        # Don't rerun - let save complete
 
     # Section 4: Missing data
     if missing_data:

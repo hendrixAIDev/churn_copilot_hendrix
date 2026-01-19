@@ -178,6 +178,7 @@ def save_web(cards_data: list[dict]):
 
     # Mark that data has changed and needs syncing
     st.session_state._cards_need_sync = True
+    print(f"[ChurnPilot] save_web called, {len(cards_data)} cards, _cards_need_sync=True")
 
 
 def sync_to_localstorage():
@@ -190,13 +191,18 @@ def sync_to_localstorage():
     - If _cards_need_sync is True: ALWAYS sync (user modified data)
     - If storage_initialized is False: DON'T sync (might overwrite with empty)
     """
+    need_sync = st.session_state.get("_cards_need_sync", False)
+    has_cards = "cards_data" in st.session_state
+    cards_count = len(st.session_state.cards_data) if has_cards else 0
+    print(f"[ChurnPilot] sync_to_localstorage called: need_sync={need_sync}, has_cards={has_cards}, count={cards_count}")
+
     # If data was modified, ALWAYS sync regardless of initialization status
     # This handles the case where st.rerun() was called after adding a card
-    if st.session_state.get("_cards_need_sync", False):
-        if "cards_data" in st.session_state:
+    if need_sync:
+        if has_cards:
             save_to_localstorage(st.session_state.cards_data)
             st.session_state._cards_need_sync = False
-            print(f"[ChurnPilot] Synced {len(st.session_state.cards_data)} cards to localStorage")
+            print(f"[ChurnPilot] Synced {cards_count} cards to localStorage")
 
 
 class WebStorage:
