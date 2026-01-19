@@ -117,6 +117,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 from src.core import (
     WebStorage,
     init_web_storage,
+    sync_to_localstorage,
     extract_from_url,
     extract_from_text,
     get_allowed_domains,
@@ -2268,6 +2269,11 @@ def main():
 
     with tab4:
         render_five_twenty_four_tab()
+
+    # CRITICAL: Sync session state to localStorage at the END of each render
+    # This must be the LAST thing before the script ends to ensure the
+    # JavaScript executes before any page reload from st.rerun()
+    sync_to_localstorage()
 
 
 if __name__ == "__main__":

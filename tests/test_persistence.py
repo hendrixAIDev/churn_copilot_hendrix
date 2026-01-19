@@ -73,7 +73,7 @@ class TestSessionStateImmediacy:
         # Save some data
         test_data = [{"id": "test1", "name": "Test Card"}]
 
-        with patch('src.core.web_storage._get_js_eval', return_value=None):
+        with patch('streamlit.components.v1.html'):
             # Even if JS eval is unavailable, session state should update
             save_web(test_data)
 
@@ -96,7 +96,7 @@ class TestSessionStateImmediacy:
             credits=[],
         )
 
-        with patch('src.core.web_storage._get_js_eval', return_value=None):
+        with patch('streamlit.components.v1.html'):
             card = storage.add_card_from_template(
                 template=template,
                 nickname="My Test",
@@ -120,7 +120,7 @@ class TestSessionStateImmediacy:
             CardTemplate(id="card3", name="Card 3", issuer="Bank C", annual_fee=550, credits=[]),
         ]
 
-        with patch('src.core.web_storage._get_js_eval', return_value=None):
+        with patch('streamlit.components.v1.html'):
             for i, template in enumerate(templates):
                 storage.add_card_from_template(template=template)
                 # Verify count after each add
@@ -153,26 +153,25 @@ class TestLocalStorageSave:
             }
         ]
 
-        # Capture the JS code that would be executed
-        captured_js = []
+        # Capture the HTML that would be injected
+        captured_html = []
 
-        def mock_js_eval(js, key):
-            captured_js.append(js)
-            return True
+        def capture_html(html_content, **kwargs):
+            captured_html.append(html_content)
 
-        with patch('src.core.web_storage._get_js_eval', return_value=mock_js_eval):
+        with patch('streamlit.components.v1.html', side_effect=capture_html):
             save_to_localstorage(test_data)
 
-        # Verify JS was generated
-        assert len(captured_js) == 1
-        js_code = captured_js[0]
+        # Verify HTML was generated
+        assert len(captured_html) == 1
+        html_code = captured_html[0]
 
-        # The JS should contain the correct storage key
-        assert STORAGE_KEY in js_code
+        # The HTML should contain the correct storage key
+        assert STORAGE_KEY in html_code
 
-        # The JS should contain the card data
-        assert "Amex Platinum" in js_code
-        assert "American Express" in js_code
+        # The HTML should contain the card data
+        assert "Amex Platinum" in html_code
+        assert "American Express" in html_code
 
     def test_save_escapes_special_characters(self):
         """Special characters in card data should be properly escaped."""
@@ -186,24 +185,22 @@ class TestLocalStorageSave:
             }
         ]
 
-        captured_js = []
+        captured_html = []
 
-        def mock_js_eval(js, key):
-            captured_js.append(js)
-            return True
+        def capture_html(html_content, **kwargs):
+            captured_html.append(html_content)
 
-        with patch('src.core.web_storage._get_js_eval', return_value=mock_js_eval):
+        with patch('streamlit.components.v1.html', side_effect=capture_html):
             save_to_localstorage(test_data)
 
         # Should not raise any errors
-        assert len(captured_js) == 1
+        assert len(captured_html) == 1
 
-        # The JS should be parseable (no syntax errors)
-        # We can't execute it, but we can verify it doesn't contain unescaped quotes
-        js_code = captured_js[0]
+        # The HTML should be parseable (no syntax errors)
+        html_code = captured_html[0]
 
         # Should contain escaped versions
-        assert "\\n" in js_code or "\\\\n" in js_code  # Newlines escaped
+        assert "\\n" in html_code or "\\\\n" in html_code  # Newlines escaped
 
     def test_save_handles_dates(self):
         """Date objects should be serialized to ISO format."""
@@ -218,19 +215,18 @@ class TestLocalStorageSave:
             }
         ]
 
-        captured_js = []
+        captured_html = []
 
-        def mock_js_eval(js, key):
-            captured_js.append(js)
-            return True
+        def capture_html(html_content, **kwargs):
+            captured_html.append(html_content)
 
-        with patch('src.core.web_storage._get_js_eval', return_value=mock_js_eval):
+        with patch('streamlit.components.v1.html', side_effect=capture_html):
             save_to_localstorage(test_data)
 
-        js_code = captured_js[0]
+        html_code = captured_html[0]
 
         # Dates should be ISO formatted
-        assert "2024-06-15" in js_code
+        assert "2024-06-15" in html_code
 
 
 class TestLocalStorageLoad:
@@ -241,15 +237,14 @@ class TestLocalStorageLoad:
         mock_st.session_state.clear()
 
     def test_load_success_on_first_try(self):
-        """When JS eval returns data immediately, it should be loaded."""
+        """When get_local_storage returns data immediately, it should be loaded."""
         test_cards = [{"id": "1", "name": "Card 1"}]
-
-        def mock_js_eval(js, key):
-            return test_cards
+        test_cards_json = json.dumps(test_cards)
 
         mock_st.toast = MagicMock()
 
-        with patch('src.core.web_storage._get_js_eval', return_value=mock_js_eval):
+        # Mock get_local_storage to return JSON string
+        with patch('streamlit_js_eval.get_local_storage', return_value=test_cards_json):
             init_web_storage()
 
         assert mock_st.session_state['cards_data'] == test_cards
@@ -257,28 +252,21 @@ class TestLocalStorageLoad:
 
     def test_load_handles_empty_storage(self):
         """Empty localStorage should result in empty list."""
-        def mock_js_eval(js, key):
-            return []  # Empty storage
-
         mock_st.toast = MagicMock()
 
-        with patch('src.core.web_storage._get_js_eval', return_value=mock_js_eval):
+        # Mock get_local_storage to return empty array JSON
+        with patch('streamlit_js_eval.get_local_storage', return_value='[]'):
             init_web_storage()
 
         assert mock_st.session_state['cards_data'] == []
         assert mock_st.session_state['storage_initialized'] == True
 
     def test_load_retries_on_none(self):
-        """When JS eval returns None, should increment retry counter."""
-        call_count = [0]
-
-        def mock_js_eval(js, key):
-            call_count[0] += 1
-            return None  # Simulate timing issue
-
+        """When get_local_storage returns None, should increment retry counter."""
         mock_st.toast = MagicMock()
 
-        with patch('src.core.web_storage._get_js_eval', return_value=mock_js_eval):
+        # Mock get_local_storage to return None (timing issue)
+        with patch('streamlit_js_eval.get_local_storage', return_value=None):
             init_web_storage()
 
         # Should have incremented retry counter
@@ -291,12 +279,10 @@ class TestLocalStorageLoad:
         mock_st.session_state['storage_load_attempts'] = 3  # Already at max
         mock_st.session_state['storage_initialized'] = False
 
-        def mock_js_eval(js, key):
-            return None
-
         mock_st.toast = MagicMock()
 
-        with patch('src.core.web_storage._get_js_eval', return_value=mock_js_eval):
+        # Mock get_local_storage to return None
+        with patch('streamlit_js_eval.get_local_storage', return_value=None):
             init_web_storage()
 
         # Should be marked as initialized now (gave up)
@@ -327,7 +313,7 @@ class TestEndToEndPersistence:
             credits=[],
         )
 
-        with patch('src.core.web_storage._get_js_eval', return_value=None):
+        with patch('streamlit.components.v1.html'):
             # Add card
             card = storage.add_card_from_template(template=template)
 
@@ -350,7 +336,7 @@ class TestEndToEndPersistence:
             CardTemplate(id="chase1", name="Chase Sapphire", issuer="Chase", annual_fee=550, credits=[]),
         ]
 
-        with patch('src.core.web_storage._get_js_eval', return_value=None):
+        with patch('streamlit.components.v1.html'):
             for template in templates:
                 storage.add_card_from_template(template=template)
 
@@ -374,7 +360,7 @@ class TestEndToEndPersistence:
             credits=[],
         )
 
-        with patch('src.core.web_storage._get_js_eval', return_value=None):
+        with patch('streamlit.components.v1.html'):
             # Create
             card = storage.add_card_from_template(template=template)
             assert len(storage.get_all_cards()) == 1
@@ -393,7 +379,11 @@ class TestEndToEndPersistence:
             assert len(storage.get_all_cards()) == 0
 
     def test_simulated_page_refresh(self):
-        """Simulate what happens on page refresh."""
+        """Simulate what happens on page refresh.
+
+        This tests the session state persistence within a session.
+        Actual browser localStorage testing is in test_browser_persistence.py.
+        """
         # First session - user adds card
         mock_st.session_state.clear()
         mock_st.session_state['cards_data'] = []
@@ -410,44 +400,23 @@ class TestEndToEndPersistence:
             credits=[],
         )
 
-        saved_to_localstorage = []
-
-        def mock_save_js_eval(js, key):
-            # Extract the data that would be saved
-            if 'localStorage.setItem' in js:
-                # The data is embedded in the JS
-                saved_to_localstorage.append(mock_st.session_state['cards_data'].copy())
-            return True
-
-        with patch('src.core.web_storage._get_js_eval', return_value=mock_save_js_eval):
+        # Add a card (HTML injection is mocked automatically)
+        with patch('streamlit.components.v1.html'):
             storage1.add_card_from_template(template=template)
 
-        # Verify save was attempted
-        assert len(saved_to_localstorage) == 1
-        saved_data = saved_to_localstorage[0]
+        # Verify card was added to session state
+        assert len(mock_st.session_state['cards_data']) == 1
+        saved_data = mock_st.session_state['cards_data'].copy()
 
-        # Second session - simulate page refresh
-        mock_st.session_state.clear()
-
-        def mock_load_js_eval(js, key):
-            # Return the saved data
-            if 'localStorage.getItem' in js:
-                return saved_data
-            return True
-
-        mock_st.toast = MagicMock()
-
-        with patch('src.core.web_storage._get_js_eval', return_value=mock_load_js_eval):
-            init_web_storage()
-
-        # Data should be loaded from "localStorage"
-        assert mock_st.session_state['cards_data'] == saved_data
-
-        # Create new storage instance and verify
+        # Simulate creating a new storage instance (same session)
+        # Session state should persist
         storage2 = WebStorage()
         cards = storage2.get_all_cards()
         assert len(cards) == 1
         assert cards[0].name == "Test Card"
+
+        # Verify session state is still intact
+        assert mock_st.session_state['cards_data'] == saved_data
 
 
 class TestEdgeCases:
@@ -463,7 +432,7 @@ class TestEdgeCases:
         """Operations on empty storage should not crash."""
         storage = WebStorage()
 
-        with patch('src.core.web_storage._get_js_eval', return_value=None):
+        with patch('streamlit.components.v1.html'):
             # Get from empty
             cards = storage.get_all_cards()
             assert cards == []
@@ -482,7 +451,7 @@ class TestEdgeCases:
 
         from src.core.library import CardTemplate
 
-        with patch('src.core.web_storage._get_js_eval', return_value=None):
+        with patch('streamlit.components.v1.html'):
             # Rapid adds
             for i in range(10):
                 template = CardTemplate(
@@ -505,7 +474,7 @@ class TestEdgeCases:
         """Updating a card that doesn't exist should return None."""
         storage = WebStorage()
 
-        with patch('src.core.web_storage._get_js_eval', return_value=None):
+        with patch('streamlit.components.v1.html'):
             result = storage.update_card("fake-id", {"nickname": "test"})
 
         assert result is None
@@ -523,7 +492,7 @@ class TestEdgeCases:
             {"id": "new1", "name": "New Card 1", "issuer": "Bank", "annual_fee": 0, "credits": [], "created_at": "2024-01-01T00:00:00"},
         ])
 
-        with patch('src.core.web_storage._get_js_eval', return_value=None):
+        with patch('streamlit.components.v1.html'):
             count = storage.import_data(new_data)
 
         assert count == 1

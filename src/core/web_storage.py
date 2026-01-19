@@ -107,30 +107,53 @@ def init_web_storage():
 def save_to_localstorage(cards_data: list[dict]) -> bool:
     """Save data to browser localStorage.
 
-    Uses the streamlit-js-eval library's built-in set_local_storage function.
+    Uses st.components.v1.html for SYNCHRONOUS JavaScript execution.
+    This is critical because streamlit_js_eval components may not execute
+    before st.rerun() is called.
+
     Returns True if save was attempted.
     """
     try:
-        from streamlit_js_eval import set_local_storage
+        from streamlit.components.v1 import html
     except ImportError:
-        print("[ChurnPilot] streamlit-js-eval not installed")
+        print("[ChurnPilot] streamlit components not available")
         return False
 
     try:
         # Serialize data to JSON string
         cards_json = json.dumps(_serialize_for_json(cards_data))
 
-        # Use unique key to avoid caching
-        import time
-        component_key = f"churnpilot_save_{int(time.time() * 1000)}"
+        # Escape for embedding in JavaScript string literal
+        # Order matters: backslashes first, then other characters
+        escaped_json = (cards_json
+            .replace('\\', '\\\\')  # Backslashes
+            .replace("'", "\\'")     # Single quotes
+            .replace('\n', '\\n')    # Newlines
+            .replace('\r', '\\r')    # Carriage returns
+            .replace('\t', '\\t')    # Tabs
+        )
 
-        # Use the library's built-in set_local_storage function
-        # Note: set_local_storage expects the value as a string
-        result = set_local_storage(STORAGE_KEY, cards_json, component_key=component_key)
+        # Use HTML component with minimal height (1px ensures JS executes)
+        # The JavaScript runs IMMEDIATELY when this component renders
+        save_script = f"""
+        <script>
+        (function() {{
+            try {{
+                var data = '{escaped_json}';
+                localStorage.setItem('{STORAGE_KEY}', data);
+                console.log('[ChurnPilot] Saved to localStorage:', data.length, 'bytes');
+            }} catch (e) {{
+                console.error('[ChurnPilot] Save error:', e);
+            }}
+        }})();
+        </script>
+        """
 
-        # Log for debugging
-        print(f"[ChurnPilot] Save attempted, result: {result}")
+        # height=1 ensures the component renders and JS executes
+        # height=0 can cause some browsers to skip JS execution
+        html(save_script, height=1)
 
+        print(f"[ChurnPilot] Save script injected, {len(cards_json)} bytes")
         return True
 
     except Exception as e:
@@ -142,14 +165,36 @@ def save_web(cards_data: list[dict]):
     """Save to browser localStorage.
 
     ALWAYS updates session state first for immediate UI availability.
-    Then attempts to persist to localStorage.
+    Note: We DON'T call save_to_localstorage here because st.rerun()
+    might race with the JavaScript execution. Instead, we rely on
+    sync_to_localstorage() being called at the end of each render.
     """
     # ALWAYS update session state first - this ensures the data is
     # available immediately for the current session
     st.session_state.cards_data = cards_data
 
-    # Then persist to localStorage for cross-session persistence
-    save_to_localstorage(cards_data)
+    # Mark that data has changed and needs syncing
+    st.session_state._cards_need_sync = True
+
+
+def sync_to_localstorage():
+    """Sync session state to localStorage.
+
+    Call this at the END of the main app render, AFTER all reruns are complete.
+    This ensures the JavaScript has time to execute before any page reload.
+
+    IMPORTANT: Only syncs if:
+    1. Storage has been successfully initialized (we've loaded from localStorage)
+    2. Data has been modified since last sync (_cards_need_sync flag)
+
+    This prevents overwriting localStorage with empty data on page load.
+    """
+    # Only sync if storage is initialized AND data needs syncing
+    if (st.session_state.get("storage_initialized", False) and
+            st.session_state.get("_cards_need_sync", False)):
+        if "cards_data" in st.session_state:
+            save_to_localstorage(st.session_state.cards_data)
+            st.session_state._cards_need_sync = False
 
 
 class WebStorage:
