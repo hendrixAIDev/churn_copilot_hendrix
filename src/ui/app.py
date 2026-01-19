@@ -373,8 +373,23 @@ def render_add_card_section():
         if selected_id:
             template = get_template(selected_id)
             if template:
-                # Show card preview
-                st.markdown(f"**{template.name}** - ${template.annual_fee}/yr")
+                # Calculate total credits value for preview
+                total_credits_value = sum(c.amount for c in template.credits if c.frequency == 'annual')
+                total_credits_value += sum(c.amount * 12 for c in template.credits if c.frequency == 'monthly')
+                total_credits_value += sum(c.amount * 4 for c in template.credits if c.frequency == 'quarterly')
+                total_credits_value += sum(c.amount * 2 for c in template.credits if c.frequency == 'semi-annually')
+
+                # Show card preview with value proposition
+                if template.annual_fee > 0 and total_credits_value > 0:
+                    net_value = total_credits_value - template.annual_fee
+                    if net_value > 0:
+                        st.markdown(f"**{template.name}** — ${template.annual_fee}/yr fee | ~${total_credits_value:,.0f}/yr credits | **+${net_value:,.0f} net**")
+                    else:
+                        st.markdown(f"**{template.name}** — ${template.annual_fee}/yr fee | ~${total_credits_value:,.0f}/yr credits")
+                elif total_credits_value > 0:
+                    st.markdown(f"**{template.name}** — No annual fee | ~${total_credits_value:,.0f}/yr credits")
+                else:
+                    st.markdown(f"**{template.name}** — ${template.annual_fee}/yr" if template.annual_fee > 0 else f"**{template.name}** — No annual fee")
 
                 col1, col2 = st.columns(2)
                 with col1:
@@ -415,6 +430,18 @@ def render_add_card_section():
                             key="lib_sub_days",
                         )
                         st.caption("Deadline will be calculated from opened date")
+
+                # Credits preview (shown BEFORE Add button so users see what they're getting)
+                if template.credits:
+                    total_value = sum(c.amount for c in template.credits if c.frequency == 'annual')
+                    total_value += sum(c.amount * 12 for c in template.credits if c.frequency == 'monthly')
+                    total_value += sum(c.amount * 4 for c in template.credits if c.frequency == 'quarterly')
+                    total_value += sum(c.amount * 2 for c in template.credits if c.frequency == 'semi-annually')
+
+                    with st.expander(f"Credits included: {len(template.credits)} benefits (~${total_value:,.0f}/yr value)", expanded=False):
+                        for credit in template.credits:
+                            notes = f" *({credit.notes})*" if credit.notes else ""
+                            st.caption(f"- {credit.name}: ${credit.amount:.0f}/{credit.frequency}{notes}")
 
                 if st.button("Add Card", type="primary", key="add_from_library", use_container_width=True):
                     # Validate inputs before saving
@@ -470,13 +497,6 @@ def render_add_card_section():
                         st.success(f"✓ Card added! Navigate to Dashboard to view.")
                     except StorageError as e:
                         st.error(f"Failed: {e}")
-
-                # Credits preview
-                if template.credits:
-                    with st.expander(f"View {len(template.credits)} included credits"):
-                        for credit in template.credits:
-                            notes = f" *({credit.notes})*" if credit.notes else ""
-                            st.caption(f"- {credit.name}: ${credit.amount}/{credit.frequency}{notes}")
 
     st.divider()
 
