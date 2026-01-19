@@ -7,7 +7,7 @@ from unittest.mock import Mock, patch, MagicMock
 import pytest
 from pydantic import ValidationError
 
-from src.core.web_storage import WebStorage, _serialize_for_json, init_web_storage, save_web
+from src.core.web_storage import WebStorage, _serialize_for_json, init_web_storage, save_web, _save_to_browser
 from src.core.models import Card, CardData, SignupBonus, Credit
 from src.core.library import get_template
 from src.core.exceptions import StorageError
@@ -192,7 +192,7 @@ class TestWebStorage:
     def test_add_card(self, mock_streamlit, sample_card_data):
         """Test adding a new card."""
         # Mock the save function to avoid JS eval
-        with patch('src.core.web_storage.save_web') as mock_save:
+        with patch('src.core.web_storage._save_to_browser') as mock_save:
             storage = WebStorage()
             card = storage.add_card(
                 card_data=sample_card_data,
@@ -208,7 +208,7 @@ class TestWebStorage:
         """Test adding a card from template."""
         template = get_template("amex_platinum")
 
-        with patch('src.core.web_storage.save_web') as mock_save:
+        with patch('src.core.web_storage._save_to_browser') as mock_save:
             storage = WebStorage()
 
             card = storage.add_card_from_template(
@@ -233,7 +233,7 @@ class TestWebStorage:
         """Test updating a card."""
         mock_streamlit.session_state.cards_data = [sample_card_dict]
 
-        with patch('src.core.web_storage.save_web') as mock_save:
+        with patch('src.core.web_storage._save_to_browser') as mock_save:
             storage = WebStorage()
             updated_card = storage.update_card(
                 "test-id-123",
@@ -246,7 +246,7 @@ class TestWebStorage:
 
     def test_update_card_not_found(self, mock_streamlit):
         """Test updating a nonexistent card."""
-        with patch('src.core.web_storage.save_web') as mock_save:
+        with patch('src.core.web_storage._save_to_browser') as mock_save:
             storage = WebStorage()
             updated_card = storage.update_card("nonexistent", {"annual_fee": 125})
             assert updated_card is None
@@ -256,7 +256,7 @@ class TestWebStorage:
         """Test deleting a card."""
         mock_streamlit.session_state.cards_data = [sample_card_dict]
 
-        with patch('src.core.web_storage.save_web') as mock_save:
+        with patch('src.core.web_storage._save_to_browser') as mock_save:
             storage = WebStorage()
             result = storage.delete_card("test-id-123")
 
@@ -265,7 +265,7 @@ class TestWebStorage:
 
     def test_delete_card_not_found(self, mock_streamlit):
         """Test deleting a nonexistent card."""
-        with patch('src.core.web_storage.save_web') as mock_save:
+        with patch('src.core.web_storage._save_to_browser') as mock_save:
             storage = WebStorage()
             result = storage.delete_card("nonexistent")
             assert result is False
@@ -285,7 +285,7 @@ class TestWebStorage:
 
     def test_import_data(self, mock_streamlit, sample_card_dict):
         """Test importing data from JSON."""
-        with patch('src.core.web_storage.save_web') as mock_save:
+        with patch('src.core.web_storage._save_to_browser') as mock_save:
             storage = WebStorage()
             json_data = json.dumps([sample_card_dict])
 
@@ -305,22 +305,23 @@ class TestWebStorage:
         """Test importing JSON that's not an array."""
         storage = WebStorage()
 
-        with pytest.raises(StorageError, match="must be a JSON array"):
+        with pytest.raises(StorageError, match="Must be a JSON array"):
             storage.import_data('{"key": "value"}')
 
 
 class TestWebStorageIntegration:
     """Integration tests for WebStorage."""
 
-    def _mock_save_web(self, mock_streamlit):
-        """Create a mock save_web that actually updates session state."""
+    def _mock_save_to_browser(self, mock_streamlit):
+        """Create a mock _save_to_browser that actually updates session state."""
         def save_side_effect(cards_data):
             mock_streamlit.session_state.cards_data = cards_data
+            return True
         return save_side_effect
 
     def test_add_multiple_cards(self, mock_streamlit, sample_card_data):
         """Test adding multiple cards."""
-        with patch('src.core.web_storage.save_web', side_effect=self._mock_save_web(mock_streamlit)):
+        with patch('src.core.web_storage._save_to_browser', side_effect=self._mock_save_to_browser(mock_streamlit)):
             storage = WebStorage()
 
             card1 = storage.add_card(sample_card_data, opened_date=date(2024, 1, 15))
@@ -331,7 +332,7 @@ class TestWebStorageIntegration:
 
     def test_update_then_retrieve(self, mock_streamlit, sample_card_data):
         """Test updating a card and retrieving it."""
-        with patch('src.core.web_storage.save_web', side_effect=self._mock_save_web(mock_streamlit)):
+        with patch('src.core.web_storage._save_to_browser', side_effect=self._mock_save_to_browser(mock_streamlit)):
             storage = WebStorage()
 
             # Add card
@@ -346,7 +347,7 @@ class TestWebStorageIntegration:
 
     def test_delete_then_retrieve(self, mock_streamlit, sample_card_data):
         """Test deleting a card and verifying it's gone."""
-        with patch('src.core.web_storage.save_web', side_effect=self._mock_save_web(mock_streamlit)):
+        with patch('src.core.web_storage._save_to_browser', side_effect=self._mock_save_to_browser(mock_streamlit)):
             storage = WebStorage()
 
             # Add card
@@ -363,7 +364,7 @@ class TestWebStorageIntegration:
 
     def test_export_import_roundtrip(self, mock_streamlit, sample_card_data):
         """Test exporting and re-importing data."""
-        with patch('src.core.web_storage.save_web', side_effect=self._mock_save_web(mock_streamlit)):
+        with patch('src.core.web_storage._save_to_browser', side_effect=self._mock_save_to_browser(mock_streamlit)):
             storage = WebStorage()
 
             # Add some cards
@@ -386,17 +387,18 @@ class TestWebStorageIntegration:
 class TestUserJourneys:
     """Test critical user journey scenarios."""
 
-    def _mock_save_web(self, mock_streamlit):
-        """Create a mock save_web that actually updates session state."""
+    def _mock_save_to_browser(self, mock_streamlit):
+        """Create a mock _save_to_browser that actually updates session state."""
         def save_side_effect(cards_data):
             mock_streamlit.session_state.cards_data = cards_data
+            return True
         return save_side_effect
 
     def test_add_card_from_library_journey(self, mock_streamlit):
         """Test: User adds card from library."""
         template = get_template("amex_platinum")
 
-        with patch('src.core.web_storage.save_web', side_effect=self._mock_save_web(mock_streamlit)):
+        with patch('src.core.web_storage._save_to_browser', side_effect=self._mock_save_to_browser(mock_streamlit)):
             storage = WebStorage()
 
             # Step 1: User selects template and adds card
@@ -426,7 +428,7 @@ class TestUserJourneys:
         """Test: User edits an existing card."""
         mock_streamlit.session_state.cards_data = [sample_card_dict]
 
-        with patch('src.core.web_storage.save_web', side_effect=self._mock_save_web(mock_streamlit)):
+        with patch('src.core.web_storage._save_to_browser', side_effect=self._mock_save_to_browser(mock_streamlit)):
             storage = WebStorage()
 
             # Step 1: User retrieves card
@@ -445,7 +447,7 @@ class TestUserJourneys:
         """Test: User deletes a card."""
         mock_streamlit.session_state.cards_data = [sample_card_dict.copy()]
 
-        with patch('src.core.web_storage.save_web', side_effect=self._mock_save_web(mock_streamlit)):
+        with patch('src.core.web_storage._save_to_browser', side_effect=self._mock_save_to_browser(mock_streamlit)):
             storage = WebStorage()
 
             # Step 1: Verify card exists
@@ -462,7 +464,7 @@ class TestUserJourneys:
 
     def test_import_export_journey(self, mock_streamlit, sample_card_data):
         """Test: User exports data, clears app, then imports."""
-        with patch('src.core.web_storage.save_web', side_effect=self._mock_save_web(mock_streamlit)):
+        with patch('src.core.web_storage._save_to_browser', side_effect=self._mock_save_to_browser(mock_streamlit)):
             storage = WebStorage()
 
             # Step 1: User adds cards
@@ -491,7 +493,7 @@ class TestUserJourneys:
             get_template("citi_strata_premier"),
         ]
 
-        with patch('src.core.web_storage.save_web', side_effect=self._mock_save_web(mock_streamlit)):
+        with patch('src.core.web_storage._save_to_browser', side_effect=self._mock_save_to_browser(mock_streamlit)):
             storage = WebStorage()
 
             # Add multiple cards
