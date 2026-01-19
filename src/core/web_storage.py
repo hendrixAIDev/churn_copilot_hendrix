@@ -49,29 +49,38 @@ def _get_js_eval_available():
 def _save_to_browser(cards_data: list[dict]) -> bool:
     """Save data directly to browser localStorage.
 
-    Returns True if save was successful.
+    Returns True if save was initiated (actual save is async in browser).
     """
-    if not _get_js_eval_available():
-        return False
-
     try:
-        from streamlit_js_eval import set_local_storage
+        from streamlit_js_eval import streamlit_js_eval
 
-        # Serialize to JSON
+        # Serialize to JSON string, then escape for JS
         json_str = json.dumps(_serialize_for_json(cards_data))
+        # Escape backticks and backslashes for JS template literal
+        js_safe = json_str.replace('\\', '\\\\').replace('`', '\\`').replace('${', '\\${')
 
         # Use incrementing key to force component re-render
         if "_save_counter" not in st.session_state:
             st.session_state._save_counter = 0
         st.session_state._save_counter += 1
 
-        set_local_storage(
-            STORAGE_KEY,
-            json_str,
-            component_key=f"save_{st.session_state._save_counter}"
-        )
+        # Direct JS execution - more reliable than set_local_storage wrapper
+        js_code = f"""
+        (function() {{
+            try {{
+                const data = `{js_safe}`;
+                localStorage.setItem('{STORAGE_KEY}', data);
+                console.log('[ChurnPilot] Saved {len(cards_data)} cards to localStorage');
+                return true;
+            }} catch (e) {{
+                console.error('[ChurnPilot] Save error:', e);
+                return false;
+            }}
+        }})()
+        """
 
-        print(f"[Storage] Saved {len(cards_data)} cards to localStorage")
+        streamlit_js_eval(js_expressions=js_code, key=f"save_{st.session_state._save_counter}")
+        print(f"[Storage] Save initiated for {len(cards_data)} cards")
         return True
 
     except Exception as e:
@@ -80,31 +89,40 @@ def _save_to_browser(cards_data: list[dict]) -> bool:
 
 
 def _load_from_browser() -> list[dict] | None:
-    """Load data from browser localStorage.
+    """Load data from browser localStorage using streamlit_js_eval.
 
-    Returns list of card dicts, or None if not available yet.
+    The component executes JS and returns the result. On first render,
+    it returns None. On subsequent reruns with the same key, it returns
+    the cached result.
     """
-    if not _get_js_eval_available():
-        return None
-
     try:
-        from streamlit_js_eval import get_local_storage
+        from streamlit_js_eval import streamlit_js_eval
 
-        # Use stable key for consistent loading
-        result = get_local_storage(STORAGE_KEY, component_key="load_stable")
+        js_code = f"""
+        (function() {{
+            try {{
+                const data = localStorage.getItem('{STORAGE_KEY}');
+                console.log('[ChurnPilot] Loading from localStorage');
+                if (data) {{
+                    return JSON.parse(data);
+                }}
+                return [];
+            }} catch (e) {{
+                console.error('[ChurnPilot] Load error:', e);
+                return [];
+            }}
+        }})()
+        """
+
+        # Use stable key - result is cached by Streamlit component system
+        result = streamlit_js_eval(js_expressions=js_code, key="churnpilot_loader")
 
         if result is None:
             return None
 
-        # Parse JSON
-        if isinstance(result, str):
-            data = json.loads(result) if result else []
-        else:
-            data = result
-
-        if isinstance(data, list):
-            print(f"[Storage] Loaded {len(data)} cards from localStorage")
-            return data
+        if isinstance(result, list):
+            print(f"[Storage] Loaded {len(result)} cards")
+            return result
 
         return []
 
@@ -116,9 +134,13 @@ def _load_from_browser() -> list[dict] | None:
 def init_web_storage():
     """Initialize web storage - called once at app startup.
 
-    This sets up session state and attempts to load from localStorage.
-    Due to Streamlit's rendering model, the first few calls may not
-    have data available - this is handled gracefully.
+    The JS component (streamlit_js_eval) returns None on first render because
+    it needs to execute in the browser first. On subsequent reruns (triggered
+    by user interaction), it returns the cached result.
+
+    Strategy: Don't use st.rerun() which kills component state. Instead,
+    let the natural Streamlit lifecycle handle it - user clicks something,
+    page reruns, and we get the data.
     """
     # Initialize session state
     if "cards_data" not in st.session_state:
@@ -127,41 +149,25 @@ def init_web_storage():
     if "storage_ready" not in st.session_state:
         st.session_state.storage_ready = False
 
-    if "load_attempts" not in st.session_state:
-        st.session_state.load_attempts = 0
-
-    # Already loaded? Skip.
+    # Already loaded successfully? Skip.
     if st.session_state.storage_ready:
-        return
-
-    # Check for js_eval
-    if not _get_js_eval_available():
-        st.error("Install streamlit-js-eval: `pip install streamlit-js-eval pyarrow`")
-        st.session_state.storage_ready = True
         return
 
     # Try to load from browser
     data = _load_from_browser()
 
     if data is not None:
-        # Got data (could be empty list)
+        # Got data (could be empty list) - this happens on SECOND+ render
         st.session_state.cards_data = data
         st.session_state.storage_ready = True
+        print(f"[Storage] Loaded {len(data)} cards into session_state")
         if data:
             st.toast(f"Loaded {len(data)} cards", icon="📱")
     else:
-        # Data not available yet - retry a few times
-        st.session_state.load_attempts += 1
-
-        if st.session_state.load_attempts < 5:
-            # Retry
-            import time
-            time.sleep(0.05)
-            st.rerun()
-        else:
-            # Give up - assume empty
-            st.session_state.storage_ready = True
-            print("[Storage] No data after 5 attempts, starting fresh")
+        # First render - JS component is rendering but hasn't returned yet
+        # DON'T use st.rerun() - it kills the component
+        # The user's first interaction will trigger a rerun and we'll get data
+        print("[Storage] Waiting for browser data (first render)...")
 
 
 def sync_to_localstorage():
