@@ -488,7 +488,7 @@ class TestUserJourneys:
         templates = [
             get_template("amex_platinum"),
             get_template("chase_sapphire_reserve"),
-            get_template("citi_premier"),
+            get_template("citi_strata_premier"),
         ]
 
         with patch('src.core.web_storage.save_web', side_effect=self._mock_save_web(mock_streamlit)):

@@ -109,9 +109,9 @@ POPULAR_CARDS = [
     ),
     # Citi - Official site
     (
-        "citi_premier",
-        "Citi Premier",
-        "https://www.citi.com/credit-cards/citi-premier-credit-card",
+        "citi_strata_premier",
+        "Citi Strata Premier",
+        "https://www.citi.com/credit-cards/citi-strata-premier-credit-card",
         "Citi",
     ),
     (
