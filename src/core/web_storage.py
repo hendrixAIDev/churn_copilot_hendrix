@@ -129,53 +129,34 @@ def init_web_storage():
 def save_to_localstorage(cards_data: list[dict]) -> bool:
     """Save data to browser localStorage.
 
-    Uses st.components.v1.html for SYNCHRONOUS JavaScript execution.
-    This is critical because streamlit_js_eval components may not execute
-    before st.rerun() is called.
+    Uses streamlit_js_eval's set_local_storage for reliable execution.
+    This is more reliable than st.components.v1.html because it's designed
+    specifically for localStorage operations and handles timing better.
 
     Returns True if save was attempted.
     """
     try:
-        from streamlit.components.v1 import html
+        from streamlit_js_eval import set_local_storage
     except ImportError:
-        print("[ChurnPilot] streamlit components not available")
+        print("[ChurnPilot] streamlit_js_eval not available for saving")
         return False
 
     try:
         # Serialize data to JSON string
         cards_json = json.dumps(_serialize_for_json(cards_data))
 
-        # Escape for embedding in JavaScript string literal
-        # Order matters: backslashes first, then other characters
-        escaped_json = (cards_json
-            .replace('\\', '\\\\')  # Backslashes
-            .replace("'", "\\'")     # Single quotes
-            .replace('\n', '\\n')    # Newlines
-            .replace('\r', '\\r')    # Carriage returns
-            .replace('\t', '\\t')    # Tabs
-        )
+        # Track save attempts for unique component keys
+        if "_save_counter" not in st.session_state:
+            st.session_state._save_counter = 0
+        st.session_state._save_counter += 1
 
-        # Use HTML component with minimal height (1px ensures JS executes)
-        # The JavaScript runs IMMEDIATELY when this component renders
-        save_script = f"""
-        <script>
-        (function() {{
-            try {{
-                var data = '{escaped_json}';
-                localStorage.setItem('{STORAGE_KEY}', data);
-                console.log('[ChurnPilot] Saved to localStorage:', data.length, 'bytes');
-            }} catch (e) {{
-                console.error('[ChurnPilot] Save error:', e);
-            }}
-        }})();
-        </script>
-        """
+        # Use set_local_storage from streamlit_js_eval
+        # CRITICAL: Use a UNIQUE component_key each time, otherwise Streamlit
+        # won't re-render the component and the save won't execute!
+        save_key = f"churnpilot_save_{st.session_state._save_counter}"
+        set_local_storage(STORAGE_KEY, cards_json, component_key=save_key)
 
-        # height=1 ensures the component renders and JS executes
-        # height=0 can cause some browsers to skip JS execution
-        html(save_script, height=1)
-
-        print(f"[ChurnPilot] Save script injected, {len(cards_json)} bytes")
+        print(f"[ChurnPilot] Save via set_local_storage (key={save_key}), {len(cards_json)} bytes")
         return True
 
     except Exception as e:

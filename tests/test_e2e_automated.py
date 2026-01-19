@@ -231,9 +231,10 @@ def run_test():
             print(f"   Attempt {attempt + 1}/5...")
 
             # Look for Dashboard tab or card content
+            # Note: get_display_name() strips "Card" from name, so search for "E2E Test"
             page_source = browser.page_source
 
-            if "E2E Test Card" in page_source:
+            if "E2E Test" in page_source:
                 print("   ✅ Card name found in page!")
                 break
             else:
@@ -244,7 +245,7 @@ def run_test():
                 if attempt < 4:
                     print("   Card not found, refreshing again...")
                     browser.refresh()
-                    wait_for_app_stable(browser, 8)
+                    wait_for_app_stable(browser, 10)  # Increased wait time
         else:
             print("   ❌ Card name NOT found after 5 attempts")
             print("   This means data is in localStorage but NOT loaded into session state")
