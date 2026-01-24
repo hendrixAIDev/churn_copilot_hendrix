@@ -111,7 +111,6 @@ coverage.xml
 # --------------------------------------------
 .claude/
 !.claude/skills/
-!.claude/settings.json
 
 # --------------------------------------------
 # Git Worktrees
