@@ -1,7 +1,24 @@
 """Pydantic data models for ChurnPilot."""
 
 from datetime import date, datetime
-from pydantic import BaseModel, Field
+from uuid import UUID
+
+from pydantic import BaseModel, Field, field_validator
+
+
+class User(BaseModel):
+    """A user account."""
+
+    id: UUID = Field(..., description="Unique identifier")
+    email: str = Field(..., description="User email (unique, lowercase)")
+    created_at: datetime | None = Field(default=None, description="Account creation time")
+    updated_at: datetime | None = Field(default=None, description="Last update time")
+
+    @field_validator("email", mode="before")
+    @classmethod
+    def normalize_email(cls, v: str) -> str:
+        """Normalize email to lowercase."""
+        return v.lower().strip() if v else v
 
 
 class Credit(BaseModel):

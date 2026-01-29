@@ -14,7 +14,6 @@ import re
 from pathlib import Path
 
 from dotenv import load_dotenv
-from anthropic import Anthropic
 
 from .models import CardData, SignupBonus, Credit
 from .exceptions import ExtractionError
@@ -151,6 +150,8 @@ def _extract_with_claude(content: str, max_content_chars: int = 15000) -> CardDa
     if len(content) > max_content_chars:
         content = content[:max_content_chars] + "\n\n[Content truncated...]"
 
+    # Lazy import Anthropic SDK (saves ~7s on app startup)
+    from anthropic import Anthropic
     client = Anthropic(api_key=api_key)
 
     try:

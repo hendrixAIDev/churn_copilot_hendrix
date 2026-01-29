@@ -1,6 +1,5 @@
 """Flexible spreadsheet importer using Claude API."""
 
-import anthropic
 import os
 import re
 from datetime import date, datetime, timedelta
@@ -110,6 +109,8 @@ class SpreadsheetImporter:
         if not self.api_key:
             raise ValueError("ANTHROPIC_API_KEY not found in Streamlit secrets or environment")
 
+        # Lazy import Anthropic SDK (saves ~7s on app startup)
+        import anthropic
         self.client = anthropic.Anthropic(api_key=self.api_key)
         self.storage = CardStorage()
 
