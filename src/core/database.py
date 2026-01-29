@@ -9,7 +9,10 @@ from psycopg2.extras import RealDictCursor
 
 
 def get_database_url() -> str:
-    """Get database URL from environment.
+    """Get database URL from Streamlit secrets or environment.
+
+    Checks st.secrets first (for Streamlit Community Cloud),
+    then falls back to environment variables (for local dev).
 
     Returns:
         PostgreSQL connection URL.
@@ -17,11 +20,21 @@ def get_database_url() -> str:
     Raises:
         ValueError: If DATABASE_URL is not set.
     """
+    # Try Streamlit secrets first (Cloud deployment)
+    try:
+        import streamlit as st
+        url = st.secrets.get("DATABASE_URL")
+        if url:
+            return url
+    except Exception:
+        pass
+
+    # Fall back to environment variable (local dev)
     url = os.environ.get("DATABASE_URL")
     if not url:
         raise ValueError(
-            "DATABASE_URL environment variable is required. "
-            "Set it to your PostgreSQL connection string."
+            "DATABASE_URL not found. "
+            "Set it in Streamlit secrets (Cloud) or as an environment variable (local)."
         )
     return url
 
