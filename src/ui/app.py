@@ -149,7 +149,7 @@ from src.core.preferences import PreferencesStorage, UserPreferences
 from src.core.exceptions import ExtractionError, StorageError, FetchError
 from src.core.auth import AuthService, validate_email, validate_password, MIN_PASSWORD_LENGTH, SESSION_TOKEN_BYTES
 from src.core.db_storage import DatabaseStorage
-from src.core.database import check_connection
+from src.core.database import check_connection, init_database
 from datetime import timedelta
 from uuid import UUID
 
@@ -398,9 +398,11 @@ def show_auth_page():
     st.title("ChurnPilot")
     st.markdown("AI-powered credit card churning management")
 
-    # Check database connection
-    if not check_connection():
-        st.error("Database connection failed. Please check your configuration.")
+    # Initialize database schema and check connection
+    try:
+        init_database()
+    except Exception as e:
+        st.error(f"Database connection failed: {e}")
         return False
 
     tab1, tab2 = st.tabs(["Login", "Register"])
