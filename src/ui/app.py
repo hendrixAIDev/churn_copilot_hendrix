@@ -231,114 +231,53 @@ Credits and Benefits:
 - Global Entry/TSA PreCheck fee credit ($100 every 4 years)
 """
 
-# Session token storage key
-SESSION_STORAGE_KEY = "churnpilot_session"
+# Session persistence via st.query_params (standard approach)
+# localStorage/cookies fail on Streamlit Cloud due to iframe sandboxing.
+# st.query_params is the only client-side storage available synchronously.
+SESSION_PARAM_KEY = "s"
 
 
 def _save_session_token(token: str) -> bool:
-    """Save session token to browser localStorage.
+    """Save session token to URL query params for persistence across refreshes.
 
     Args:
         token: Session token to save.
 
     Returns:
-        True if save was initiated.
+        True if save was successful.
     """
     try:
-        from streamlit_js_eval import streamlit_js_eval
-
-        # Use incrementing key to force component re-render
-        if "_session_save_counter" not in st.session_state:
-            st.session_state._session_save_counter = 0
-        st.session_state._session_save_counter += 1
-
-        js_code = f"""
-        (function() {{
-            try {{
-                localStorage.setItem('{SESSION_STORAGE_KEY}', '{token}');
-                console.log('[ChurnPilot] Session token saved');
-                return true;
-            }} catch (e) {{
-                console.error('[ChurnPilot] Session save error:', e);
-                return false;
-            }}
-        }})()
-        """
-
-        streamlit_js_eval(
-            js_expressions=js_code,
-            key=f"session_save_{st.session_state._session_save_counter}"
-        )
+        st.query_params[SESSION_PARAM_KEY] = token
         return True
-
     except Exception as e:
         print(f"[Session] Save error: {e}")
         return False
 
 
 def _load_session_token() -> str | None:
-    """Load session token from browser localStorage.
+    """Load session token from URL query params.
 
     Returns:
         Session token if found, None otherwise.
     """
     try:
-        from streamlit_js_eval import streamlit_js_eval
-
-        js_code = f"""
-        (function() {{
-            try {{
-                const token = localStorage.getItem('{SESSION_STORAGE_KEY}');
-                console.log('[ChurnPilot] Loading session token:', token ? 'found' : 'not found');
-                return token || null;
-            }} catch (e) {{
-                console.error('[ChurnPilot] Session load error:', e);
-                return null;
-            }}
-        }})()
-        """
-
-        # Use stable key for caching
-        result = streamlit_js_eval(js_expressions=js_code, key="session_loader")
-        return result
-
+        token = st.query_params.get(SESSION_PARAM_KEY)
+        return token if token else None
     except Exception as e:
         print(f"[Session] Load error: {e}")
         return None
 
 
 def _clear_session_token() -> bool:
-    """Clear session token from browser localStorage.
+    """Clear session token from URL query params.
 
     Returns:
-        True if clear was initiated.
+        True if clear was successful.
     """
     try:
-        from streamlit_js_eval import streamlit_js_eval
-
-        if "_session_clear_counter" not in st.session_state:
-            st.session_state._session_clear_counter = 0
-        st.session_state._session_clear_counter += 1
-
-        js_code = f"""
-        (function() {{
-            try {{
-                localStorage.removeItem('{SESSION_STORAGE_KEY}');
-                console.log('[ChurnPilot] Session token cleared');
-                return true;
-            }} catch (e) {{
-                console.error('[ChurnPilot] Session clear error:', e);
-                return false;
-            }}
-        }})()
-        """
-
-        streamlit_js_eval(
-            js_expressions=js_code,
-            key=f"session_clear_{st.session_state._session_clear_counter}"
-        )
+        if SESSION_PARAM_KEY in st.query_params:
+            del st.query_params[SESSION_PARAM_KEY]
         return True
-
     except Exception as e:
         print(f"[Session] Clear error: {e}")
         return False
@@ -347,7 +286,8 @@ def _clear_session_token() -> bool:
 def check_stored_session() -> bool:
     """Check for stored session token and restore session if valid.
 
-    This is called on page load to restore authentication from browser storage.
+    This is called on page load to restore authentication from URL params.
+    Works synchronously — no JS component timing issues.
 
     Returns:
         True if session was restored, False otherwise.
@@ -361,10 +301,6 @@ def check_stored_session() -> bool:
         return False
 
     token = _load_session_token()
-
-    # First render returns None - wait for next rerun
-    if token is None:
-        return False
 
     # No token found
     if not token or len(token) != SESSION_TOKEN_BYTES * 2:
