@@ -128,3 +128,4 @@ temp/
 tmpclaude-*-cwd
 *.backup
 .streamlit/secrets.toml
+.streamlit/secrets.toml
