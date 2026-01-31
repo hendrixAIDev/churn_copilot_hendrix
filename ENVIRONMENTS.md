@@ -64,18 +64,8 @@
 Set in Streamlit Cloud → App → Settings → Secrets:
 
 ```toml
-DATABASE_URL = "postgresql://postgres.PROJECT_ID:PASSWORD@aws-0-us-west-2.pooler.supabase.com:6543/postgres"
-ANTHROPIC_API_KEY = "sk-ant-..."
+DATABASE_URL = "postgresql://postgres.PROJECT_ID:YOUR_PASSWORD@aws-0-us-west-2.pooler.supabase.com:6543/postgres"
+ANTHROPIC_API_KEY = "sk-ant-YOUR_KEY_HERE"
 ```
 
-### Experiment App Secrets
-```toml
-DATABASE_URL = "postgresql://postgres.iwekqsxshzadzxezkrxo:REDACTED_SANDBOX_PW@aws-0-us-west-2.pooler.supabase.com:6543/postgres"
-ANTHROPIC_API_KEY = "sk-ant-api03-..."
-```
-
-### Prod App Secrets (when deploying)
-```toml
-DATABASE_URL = "postgresql://postgres.qgrkmsvblpfjkcjdwwdo:REDACTED_PROD_PW@aws-0-us-west-2.pooler.supabase.com:6543/postgres"
-ANTHROPIC_API_KEY = "sk-ant-api03-..."
-```
+⚠️ **NEVER commit actual credentials to this file.** Passwords are stored in `.env.local` (gitignored) and Streamlit Cloud Secrets (UI only).
