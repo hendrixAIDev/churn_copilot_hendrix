@@ -1,90 +1,127 @@
-# ChurnPilot
+# ChurnPilot ✈️
 
-AI-powered credit card churning management system. Replace spreadsheet chaos with intelligent extraction and actionable insights.
+**Stop leaving thousands of dollars on the table with your credit cards.**
 
-## MVP Features
+ChurnPilot is a free, AI-powered credit card management dashboard for enthusiasts tracking 10-50+ cards. Track signup bonuses, maximize monthly benefits, monitor Chase 5/24 status, and never miss a deadline.
 
-- **Paste & Parse**: Paste card terms, emails, or T&C text → get structured data
-- **AI Extraction**: Claude extracts card name, issuer, annual fee, SUB details, and credits
-- **Dashboard**: View all cards with next action dates highlighted
+🔗 **[Try it now → churnpilot.streamlit.app](https://churnpilot.streamlit.app)**
 
-## Quick Start
+---
 
-### Prerequisites
+## Why ChurnPilot?
 
-- Python 3.11+
-- Anthropic API key
+The average credit card enthusiast leaves **$500-2,000/year** on the table:
+- Forgetting monthly credits ($300/yr DoorDash on Amex Gold alone)
+- Missing signup bonus spend deadlines ($1,000+ lost)
+- Not knowing their Chase 5/24 status
+- Losing track of annual fee renewal dates
 
-### Installation
+**ChurnPilot fixes all of this in one dashboard.**
+
+## Features
+
+### Card Library (18+ templates)
+Add cards from Chase, Amex, Capital One, Citi, Bilt, US Bank, and Wells Fargo with all benefits pre-loaded. No manual data entry.
+
+### AI Card Extraction
+Paste any card offer URL and let AI extract the annual fee, benefits, signup bonus, and spend requirements automatically.
+
+### Benefit Tracking
+Track monthly credits, annual credits, and special perks. See which ones you've used and which you're leaving on the table. Get your **usage rate** and **value extraction** percentage.
+
+### Signup Bonus Tracker
+Track spend requirements, deadlines, and progress. Never miss a bonus again.
+
+### Chase 5/24 Tracker
+Know exactly when you can apply for more Chase cards based on your application history.
+
+### Portfolio Analytics
+See your total annual fees, benefits value, net value, and ROI at a glance. Know if your cards are earning their keep.
+
+### Export to CSV
+Take your data anywhere.
+
+## Tech Stack
+
+- **Frontend:** Streamlit
+- **Backend:** Python
+- **Database:** Supabase (PostgreSQL)
+- **AI:** Claude API (for card extraction)
+- **Auth:** Custom bcrypt-based authentication
+- **Session Persistence:** `st.query_params` (survives page refresh)
+
+## Local Development
 
 ```bash
-# Clone and enter directory
-cd churn_copilot
+# Clone
+git clone https://github.com/hendrixAIDev/churn_copilot_hendrix.git
+cd churn_copilot_hendrix
 
-# Create virtual environment
+# Setup
 python -m venv venv
-venv\Scripts\activate  # Windows
-# source venv/bin/activate  # macOS/Linux
-
-# Install dependencies
+source venv/bin/activate  # macOS/Linux
 pip install -r requirements.txt
 
-# Set API key
-set ANTHROPIC_API_KEY=your-key-here  # Windows
-# export ANTHROPIC_API_KEY=your-key-here  # macOS/Linux
+# Configure
+cp .env.example .env
+# Edit .env with your Supabase and Claude API credentials
+
+# Run
+streamlit run src/ui/app.py
 ```
 
-### Run
+Visit `http://localhost:8501`
+
+## Running Tests
 
 ```bash
-streamlit run src/ui/app.py
+source venv/bin/activate
+pytest tests/ -v
 ```
 
 ## Project Structure
 
 ```
-churn_copilot/
+churn_copilot_hendrix/
 ├── src/
-│   ├── core/               # Business logic (UI-agnostic)
-│   │   ├── models.py       # Pydantic data models
-│   │   ├── extractor.py    # AI extraction via Anthropic
-│   │   ├── storage.py      # JSON/SQLite persistence
-│   │   └── prompts.py      # AI prompt templates
-│   └── ui/                 # Streamlit frontend
-│       └── app.py
-├── data/                   # Local data storage
-├── tests/                  # Unit tests
-├── CLAUDE.md               # Development guidelines
-├── requirements.txt
-└── README.md
+│   ├── core/           # Business logic
+│   │   ├── auth.py     # Authentication
+│   │   ├── database.py # DB connection
+│   │   ├── db_storage.py # Data persistence
+│   │   ├── demo.py     # Demo mode
+│   │   ├── library.py  # 18+ card templates
+│   │   ├── models.py   # Data models
+│   │   └── pipeline.py # AI extraction
+│   └── ui/
+│       ├── app.py      # Main application
+│       └── components/  # UI components
+├── tests/              # Test suite
+├── scripts/
+│   └── init_db.py      # Database initialization
+└── requirements.txt
 ```
-
-## Architecture
-
-The core extraction logic is **decoupled from the UI layer**, enabling:
-
-- Swap Streamlit for React/Next.js without rewriting AI logic
-- Unit test extraction independently
-- Reuse core module for CLI tools or APIs
 
 ## Roadmap
 
-### MVP (Current)
-- [x] Project structure
-- [ ] Paste & Parse interface
-- [ ] AI extraction pipeline
-- [ ] Basic dashboard table
+- [x] Card library with 18+ templates
+- [x] AI extraction from URLs
+- [x] Benefit tracking
+- [x] Chase 5/24 tracker
+- [x] Session persistence
+- [x] Demo mode
+- [ ] Pro tier ($9.99/month)
+- [ ] Plaid integration (auto-import transactions)
+- [ ] Email reminders for deadlines
+- [ ] Mobile-optimized layout
+- [ ] Card comparison tool
+- [ ] Annual fee analyzer
 
-### Phase 2
-- [ ] Email ingestion
-- [ ] PDF statement parsing
-- [ ] SQLite persistence
+## About
 
-### Phase 3
-- [ ] Proactive alerts
-- [ ] Chase 5/24 tracker
-- [ ] RAG-based strategy advisor
+Built by [Hendrix](https://hendrixaidev.github.io) -- an autonomous AI co-founder given $1,000 and a deadline (April 2026) to build sustainable revenue.
+
+Follow the journey: [@HendrixVol328](https://x.com/HendrixVol328) | [The Hendrix Chronicles](https://hendrixchronicles.substack.com)
 
 ## License
 
-Private - All rights reserved
+MIT
