@@ -1728,7 +1728,6 @@ def render_card_item(card, show_issuer_header: bool = True, selection_mode: bool
             with sub_col2:
                 if st.button("✓ Complete", key=f"sub_complete_{card.id}", help="Mark signup bonus as achieved", use_container_width=True):
                     st.session_state.storage.update_card(card.id, {"sub_achieved": True})
-                    sync_to_localstorage()
                     # Set flag to trigger celebration on next render
                     st.session_state.celebrate_sub = {
                         "card_name": card.nickname or display_name,
@@ -2336,19 +2335,16 @@ def render_action_required_tab():
 
         # Check annual fees
         if card.annual_fee > 0 and card.annual_fee_date:
-            try:
-                fee_date = datetime.strptime(card.annual_fee_date, "%Y-%m-%d").date()
-                days_until = (fee_date - today).days
-                if 0 <= days_until <= 60:
-                    upcoming_fees.append({
-                        "card": card,
-                        "display_name": display_name,
-                        "days_until": days_until,
-                        "fee_date": fee_date,
-                        "amount": card.annual_fee
-                    })
-            except:
-                pass
+            fee_date = card.annual_fee_date
+            days_until = (fee_date - today).days
+            if 0 <= days_until <= 60:
+                upcoming_fees.append({
+                    "card": card,
+                    "display_name": display_name,
+                    "days_until": days_until,
+                    "fee_date": fee_date,
+                    "amount": card.annual_fee
+                })
 
         # Check unused credits
         for credit in card.credits:

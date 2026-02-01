@@ -21,11 +21,9 @@ Requirements:
 """
 
 import pytest
-import subprocess
 import time
 import json
 import sys
-import os
 from pathlib import Path
 
 # Add project root to path
@@ -34,41 +32,16 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 @pytest.fixture(scope="module")
 def streamlit_app():
-    """Start Streamlit app for testing."""
-    env = os.environ.copy()
-    env["STREAMLIT_SERVER_HEADLESS"] = "true"
-
-    process = subprocess.Popen(
-        [sys.executable, "-m", "streamlit", "run", "src/ui/app.py",
-         "--server.port", "8597",
-         "--server.headless", "true",
-         "--browser.gatherUsageStats", "false"],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        env=env,
-        cwd=str(Path(__file__).parent.parent)
-    )
-
-    # Wait for app to start
-    time.sleep(8)
-
-    yield "http://localhost:8597"
-
-    # Cleanup
-    process.terminate()
-    try:
-        process.wait(timeout=5)
-    except subprocess.TimeoutExpired:
-        process.kill()
+    """Use the already-running Streamlit app on localhost:8501."""
+    yield "http://localhost:8501"
 
 
 @pytest.fixture(scope="module")
 def browser():
-    """Create a Selenium browser instance."""
+    """Create a Selenium browser instance using local chromedriver."""
     from selenium import webdriver
     from selenium.webdriver.chrome.service import Service
     from selenium.webdriver.chrome.options import Options
-    from webdriver_manager.chrome import ChromeDriverManager
 
     options = Options()
     options.add_argument("--headless=new")
@@ -78,7 +51,7 @@ def browser():
     options.add_argument("--window-size=1920,1080")
 
     try:
-        service = Service(ChromeDriverManager().install())
+        service = Service("/tmp/chromedriver-mac-arm64/chromedriver")
         driver = webdriver.Chrome(service=service, options=options)
     except Exception as e:
         pytest.skip(f"Chrome not available: {e}")
