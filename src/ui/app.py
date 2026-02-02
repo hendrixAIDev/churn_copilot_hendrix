@@ -1,112 +1,454 @@
 """Streamlit UI for ChurnPilot."""
 
 import streamlit as st
-from datetime import date
+from datetime import date, datetime, timedelta
 import sys
 from pathlib import Path
+# Session persistence via localStorage (streamlit_js_eval).
+# streamlit_js_eval accesses the parent page's localStorage via window.parent,
+# bypassing Streamlit's iframe sandbox. This enables true session persistence:
+# - Survives browser refresh ✅
+# - Survives typing URL directly ✅ (token lives in browser storage, not URL)
+# - Survives bookmarks ✅ (no token in URL to leak)
+# - Clean URLs ✅ (no ?s= query param needed)
 
+# Session token storage key in localStorage
+SESSION_STORAGE_KEY = "churnpilot_session"
 
-# Custom CSS for cleaner UI
+# Custom CSS for cleaner UI — ChurnPilot Design System v2
 CUSTOM_CSS = """
 <style>
-    /* Card container styling */
+    /* ===== GLOBAL DESIGN TOKENS ===== */
+    :root {
+        --cp-primary: #6366f1;
+        --cp-primary-light: #818cf8;
+        --cp-primary-dark: #4f46e5;
+        --cp-primary-bg: #eef2ff;
+        --cp-success: #10b981;
+        --cp-success-bg: #ecfdf5;
+        --cp-warning: #f59e0b;
+        --cp-warning-bg: #fffbeb;
+        --cp-danger: #ef4444;
+        --cp-danger-bg: #fef2f2;
+        --cp-info: #3b82f6;
+        --cp-info-bg: #eff6ff;
+        --cp-text: #1a1a2e;
+        --cp-text-secondary: #64748b;
+        --cp-text-muted: #94a3b8;
+        --cp-surface: #ffffff;
+        --cp-surface-raised: #ffffff;
+        --cp-border: #e2e8f0;
+        --cp-border-light: #f1f5f9;
+        --cp-radius-sm: 8px;
+        --cp-radius-md: 12px;
+        --cp-radius-lg: 16px;
+        --cp-radius-xl: 20px;
+        --cp-shadow-sm: 0 1px 3px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.06);
+        --cp-shadow-md: 0 4px 6px -1px rgba(0,0,0,0.07), 0 2px 4px -2px rgba(0,0,0,0.05);
+        --cp-shadow-lg: 0 10px 15px -3px rgba(0,0,0,0.08), 0 4px 6px -4px rgba(0,0,0,0.04);
+        --cp-transition: 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    /* ===== HIDE STREAMLIT CHROME ===== */
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    header[data-testid="stHeader"] {background: transparent; pointer-events: none;}
+    .stDeployButton {display: none !important;}
+    [data-testid="stHeader"] button {display: none !important;}
+    header button[kind="header"] {display: none !important;}
+    .stApp > header {display: none !important;}
+
+    /* ===== TYPOGRAPHY ===== */
+    h1, h2, h3, h4, h5, h6 {
+        color: var(--cp-text) !important;
+        font-weight: 700 !important;
+        letter-spacing: -0.02em;
+    }
+    h1 { font-size: 1.875rem !important; }
+    h2 { font-size: 1.5rem !important; }
+    h3 { font-size: 1.25rem !important; }
+
+    /* ===== SIDEBAR ===== */
+    [data-testid="stSidebar"] {
+        background: linear-gradient(180deg, #1e1b4b 0%, #312e81 100%) !important;
+        border-right: none !important;
+    }
+    [data-testid="stSidebar"] * {
+        color: #e0e7ff !important;
+    }
+    [data-testid="stSidebar"] h1 {
+        color: #ffffff !important;
+        font-size: 1.5rem !important;
+        font-weight: 800 !important;
+        letter-spacing: -0.03em;
+    }
+    [data-testid="stSidebar"] .stCaption,
+    [data-testid="stSidebar"] small,
+    [data-testid="stSidebar"] [data-testid="stCaptionContainer"] {
+        color: #a5b4fc !important;
+        opacity: 0.85;
+    }
+    [data-testid="stSidebar"] hr {
+        border-color: rgba(165, 180, 252, 0.2) !important;
+    }
+    [data-testid="stSidebar"] a {
+        color: #c7d2fe !important;
+        text-decoration: none;
+        transition: color var(--cp-transition);
+    }
+    [data-testid="stSidebar"] a:hover {
+        color: #ffffff !important;
+    }
+    [data-testid="stSidebar"] .stButton > button {
+        background: rgba(255,255,255,0.1) !important;
+        border: 1px solid rgba(255,255,255,0.15) !important;
+        color: #e0e7ff !important;
+        backdrop-filter: blur(4px);
+    }
+    [data-testid="stSidebar"] .stButton > button:hover {
+        background: rgba(255,255,255,0.2) !important;
+        border-color: rgba(255,255,255,0.3) !important;
+    }
+    [data-testid="stSidebar"] [data-testid="stMetricValue"] {
+        color: #ffffff !important;
+        font-weight: 700 !important;
+    }
+    [data-testid="stSidebar"] [data-testid="stMetricLabel"] {
+        color: #c7d2fe !important;
+    }
+    [data-testid="stSidebar"] [data-testid="stMetricDelta"] {
+        color: #a5b4fc !important;
+    }
+    [data-testid="stSidebar"] [data-testid="stExpander"] {
+        background: rgba(255,255,255,0.05) !important;
+        border: 1px solid rgba(255,255,255,0.1) !important;
+        border-radius: var(--cp-radius-sm);
+    }
+
+    /* ===== MAIN CONTENT ===== */
+    .stApp > div > div > div > div > section + section {
+        padding-top: 1rem;
+    }
+
+    /* ===== METRICS ===== */
+    [data-testid="stMetric"] {
+        background: var(--cp-surface);
+        border: 1px solid var(--cp-border);
+        border-radius: var(--cp-radius-md);
+        padding: 16px 20px;
+        box-shadow: var(--cp-shadow-sm);
+        transition: box-shadow var(--cp-transition), transform var(--cp-transition);
+    }
+    [data-testid="stMetric"]:hover {
+        box-shadow: var(--cp-shadow-md);
+        transform: translateY(-1px);
+    }
+    [data-testid="stMetricValue"] {
+        font-size: 1.75rem !important;
+        font-weight: 800 !important;
+        color: var(--cp-text) !important;
+        letter-spacing: -0.02em;
+    }
+    [data-testid="stMetricLabel"] {
+        font-size: 0.8rem !important;
+        font-weight: 600 !important;
+        color: var(--cp-text-secondary) !important;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+
+    /* ===== TABS ===== */
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 0;
+        background: var(--cp-surface);
+        border-radius: var(--cp-radius-md);
+        padding: 4px;
+        border: 1px solid var(--cp-border);
+        box-shadow: var(--cp-shadow-sm);
+    }
+    .stTabs [data-baseweb="tab"] {
+        border-radius: var(--cp-radius-sm);
+        padding: 8px 20px;
+        font-weight: 600;
+        font-size: 0.875rem;
+        color: var(--cp-text-secondary);
+        transition: all var(--cp-transition);
+    }
+    .stTabs [data-baseweb="tab"]:hover {
+        background: var(--cp-primary-bg);
+        color: var(--cp-primary);
+    }
+    .stTabs [aria-selected="true"] {
+        background: var(--cp-primary) !important;
+        color: white !important;
+        box-shadow: 0 2px 8px rgba(99, 102, 241, 0.3);
+    }
+    .stTabs [data-baseweb="tab-highlight"] {
+        display: none;
+    }
+    .stTabs [data-baseweb="tab-border"] {
+        display: none;
+    }
+
+    /* ===== BUTTONS ===== */
+    .stButton > button {
+        border-radius: var(--cp-radius-sm) !important;
+        font-weight: 600 !important;
+        font-size: 0.875rem !important;
+        padding: 6px 16px !important;
+        transition: all var(--cp-transition) !important;
+        border: 1px solid var(--cp-border) !important;
+    }
+    .stButton > button:hover {
+        box-shadow: var(--cp-shadow-md) !important;
+        transform: translateY(-1px);
+    }
+    .stButton > button[kind="primary"],
+    .stButton > button[data-testid="stBaseButton-primary"] {
+        background: linear-gradient(135deg, var(--cp-primary) 0%, var(--cp-primary-dark) 100%) !important;
+        border: none !important;
+        color: white !important;
+        box-shadow: 0 2px 8px rgba(99, 102, 241, 0.25) !important;
+    }
+    .stButton > button[kind="primary"]:hover,
+    .stButton > button[data-testid="stBaseButton-primary"]:hover {
+        box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4) !important;
+    }
+
+    /* ===== FORM INPUTS ===== */
+    .stTextInput > div > div > input,
+    .stTextArea > div > div > textarea,
+    .stSelectbox > div > div {
+        border-radius: var(--cp-radius-sm) !important;
+        border-color: var(--cp-border) !important;
+        transition: border-color var(--cp-transition), box-shadow var(--cp-transition);
+    }
+    .stTextInput > div > div > input:focus,
+    .stTextArea > div > div > textarea:focus {
+        border-color: var(--cp-primary) !important;
+        box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1) !important;
+    }
+
+    /* ===== FORMS ===== */
+    [data-testid="stForm"] {
+        background: var(--cp-surface);
+        border: 1px solid var(--cp-border);
+        border-radius: var(--cp-radius-lg) !important;
+        padding: 24px !important;
+        box-shadow: var(--cp-shadow-sm);
+    }
+
+    /* ===== EXPANDERS ===== */
+    [data-testid="stExpander"] {
+        border: 1px solid var(--cp-border) !important;
+        border-radius: var(--cp-radius-md) !important;
+        box-shadow: var(--cp-shadow-sm);
+        overflow: hidden;
+    }
+    [data-testid="stExpander"] summary {
+        font-weight: 600;
+    }
+
+    /* ===== DIVIDERS ===== */
+    hr {
+        border-color: var(--cp-border-light) !important;
+        margin: 1.5rem 0 !important;
+    }
+
+    /* ===== STATUS BADGES ===== */
+    .badge {
+        display: inline-flex;
+        align-items: center;
+        padding: 3px 10px;
+        border-radius: 20px;
+        font-size: 0.72rem;
+        font-weight: 600;
+        margin-right: 6px;
+        letter-spacing: 0.02em;
+    }
+    .badge-warning {
+        background: var(--cp-warning-bg);
+        color: #92400e;
+        border: 1px solid rgba(245, 158, 11, 0.2);
+    }
+    .badge-success {
+        background: var(--cp-success-bg);
+        color: #065f46;
+        border: 1px solid rgba(16, 185, 129, 0.2);
+    }
+    .badge-danger {
+        background: var(--cp-danger-bg);
+        color: #991b1b;
+        border: 1px solid rgba(239, 68, 68, 0.2);
+    }
+    .badge-info {
+        background: var(--cp-primary-bg);
+        color: #3730a3;
+        border: 1px solid rgba(99, 102, 241, 0.2);
+    }
+    .badge-muted {
+        background: #f1f5f9;
+        color: var(--cp-text-secondary);
+        border: 1px solid var(--cp-border);
+    }
+
+    /* ===== CARD ITEMS ===== */
     .card-container {
-        background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
-        border: 1px solid #e9ecef;
-        border-radius: 12px;
-        padding: 16px;
+        background: var(--cp-surface);
+        border: 1px solid var(--cp-border);
+        border-radius: var(--cp-radius-md);
+        padding: 16px 20px;
         margin-bottom: 12px;
-        transition: box-shadow 0.2s ease;
-        color: #262730;
+        transition: box-shadow var(--cp-transition), transform var(--cp-transition);
+        color: var(--cp-text);
     }
     .card-container:hover {
-        box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+        box-shadow: var(--cp-shadow-md);
+        transform: translateY(-1px);
     }
 
-    /* Status badges */
-    .badge {
-        display: inline-block;
-        padding: 2px 8px;
-        border-radius: 12px;
-        font-size: 0.75rem;
-        font-weight: 500;
-        margin-right: 4px;
-    }
-    .badge-warning { background: #fff3cd; color: #856404; }
-    .badge-success { background: #d4edda; color: #155724; }
-    .badge-danger { background: #f8d7da; color: #721c24; }
-    .badge-info { background: #cce5ff; color: #004085; }
-    .badge-muted { background: #e9ecef; color: #6c757d; }
-
-    /* Benefits progress bar - no text content */
+    /* ===== BENEFITS PROGRESS ===== */
     .benefits-progress {
-        background: #e9ecef; /* no text content */
-        border-radius: 4px;
+        background: #e2e8f0;
+        border-radius: 6px;
         height: 6px;
         overflow: hidden;
         margin: 4px 0;
     }
     .benefits-progress-fill {
-        background: linear-gradient(90deg, #28a745 0%, #20c997 100%); /* no text content */
+        background: linear-gradient(90deg, var(--cp-primary) 0%, var(--cp-primary-light) 100%);
         height: 100%;
-        transition: width 0.3s ease;
+        transition: width 0.4s ease;
+        border-radius: 6px;
     }
 
-    /* Summary card styling */
+    /* ===== SUMMARY CARDS ===== */
     .summary-card {
-        background: white;
-        border-radius: 12px;
-        padding: 20px;
+        background: var(--cp-surface);
+        border-radius: var(--cp-radius-lg);
+        padding: 24px;
         text-align: center;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.06);
-        color: #262730;
+        box-shadow: var(--cp-shadow-md);
+        color: var(--cp-text);
+        border: 1px solid var(--cp-border);
     }
     .summary-value {
         font-size: 2rem;
-        font-weight: 700;
-        color: #212529;
+        font-weight: 800;
+        color: var(--cp-text);
+        letter-spacing: -0.02em;
     }
     .summary-label {
-        font-size: 0.875rem;
-        color: #6c757d;
+        font-size: 0.8rem;
+        color: var(--cp-text-secondary);
         text-transform: uppercase;
-        letter-spacing: 0.5px;
+        letter-spacing: 0.05em;
+        font-weight: 600;
     }
 
-    /* Compact button styling */
-    .stButton > button {
-        border-radius: 8px;
-        font-size: 0.875rem;
-        padding: 4px 12px;
-    }
-
-    /* Hide Streamlit branding */
-    #MainMenu {visibility: hidden;}
-    footer {visibility: hidden;}
-
-    /* Better metric styling */
-    [data-testid="stMetricValue"] {
-        font-size: 1.5rem;
-    }
-
-    /* Checkbox styling in benefits */
+    /* ===== BENEFIT ITEMS ===== */
     .benefit-item {
-        padding: 8px 12px;
+        padding: 10px 14px;
         margin: 4px 0;
-        border-radius: 8px;
-        background: #f8f9fa;
-        border-left: 3px solid #dee2e6;
-        color: #262730;
+        border-radius: var(--cp-radius-sm);
+        background: #f8fafc;
+        border-left: 3px solid var(--cp-border);
+        color: var(--cp-text);
+        transition: all var(--cp-transition);
+    }
+    .benefit-item:hover {
+        background: #f1f5f9;
     }
     .benefit-item.used {
-        background: #d4edda;
-        border-left-color: #28a745;
-        color: #155724;
+        background: var(--cp-success-bg);
+        border-left-color: var(--cp-success);
+        color: #065f46;
     }
     .benefit-item.unused {
-        background: #fff3cd;
-        border-left-color: #ffc107;
-        color: #856404;
+        background: var(--cp-warning-bg);
+        border-left-color: var(--cp-warning);
+        color: #92400e;
+    }
+
+    /* ===== DOWNLOAD BUTTON ===== */
+    .stDownloadButton > button {
+        border-radius: var(--cp-radius-sm) !important;
+        border: 1px solid var(--cp-border) !important;
+        font-weight: 600 !important;
+        font-size: 0.8rem !important;
+    }
+
+    /* ===== ALERTS (st.info, st.warning, etc) ===== */
+    [data-testid="stAlert"] {
+        border-radius: var(--cp-radius-md) !important;
+        border-left-width: 4px !important;
+    }
+
+    /* ===== CHECKBOX ===== */
+    .stCheckbox label span {
+        font-weight: 500;
+    }
+
+    /* ===== CARD LIST ITEMS ===== */
+    /* Add subtle separators between card items */
+    [data-testid="stVerticalBlock"] > [data-testid="stVerticalBlock"] {
+        /* Subtle bottom border for card items */
+    }
+
+    /* ===== SCROLLBAR ===== */
+    ::-webkit-scrollbar {
+        width: 6px;
+        height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+        background: transparent;
+    }
+    ::-webkit-scrollbar-thumb {
+        background: #cbd5e1;
+        border-radius: 3px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+        background: #94a3b8;
+    }
+
+    /* ===== AUTH PAGE SPECIFIC ===== */
+    .auth-container {
+        max-width: 420px;
+        margin: 40px auto;
+        padding: 40px;
+        background: var(--cp-surface);
+        border-radius: var(--cp-radius-xl);
+        box-shadow: var(--cp-shadow-lg);
+        border: 1px solid var(--cp-border);
+    }
+    .auth-logo {
+        text-align: center;
+        margin-bottom: 8px;
+    }
+    .auth-logo h1 {
+        font-size: 2rem !important;
+        font-weight: 800 !important;
+        background: linear-gradient(135deg, var(--cp-primary) 0%, #8b5cf6 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        margin-bottom: 4px !important;
+    }
+    .auth-tagline {
+        text-align: center;
+        color: var(--cp-text-secondary);
+        font-size: 0.95rem;
+        margin-bottom: 32px;
+    }
+
+    /* ===== DEMO MODE BANNER ===== */
+    .demo-banner {
+        background: linear-gradient(135deg, var(--cp-primary-bg) 0%, #ddd6fe 100%);
+        border: 1px solid rgba(99, 102, 241, 0.2);
+        border-radius: var(--cp-radius-md);
+        padding: 12px 20px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
     }
 </style>
 """
@@ -231,63 +573,140 @@ Credits and Benefits:
 - Global Entry/TSA PreCheck fee credit ($100 every 4 years)
 """
 
-# Session persistence via st.query_params (standard approach)
-# localStorage/cookies fail on Streamlit Cloud due to iframe sandboxing.
-# st.query_params is the only client-side storage available synchronously.
-SESSION_PARAM_KEY = "s"
+# ==================== SESSION TOKEN PERSISTENCE (localStorage) ====================
+#
+# Uses streamlit_js_eval to access the parent page's localStorage via window.parent.
+# This is the key insight from the experiment branch: streamlit_js_eval's JS
+# runs in a context that CAN access window.parent, unlike regular Streamlit
+# components which are sandboxed in iframes.
+#
+# Flow:
+# 1. On login/register: save token to localStorage + st.session_state
+# 2. On page load: read token from localStorage, validate against DB
+# 3. On logout: clear localStorage + DB session + st.session_state
+#
+# Two-phase loading:
+# - Phase 1 (first render): streamlit_js_eval component mounts, returns None
+# - Phase 2 (rerun): JS returns the actual localStorage value
+# We handle this by checking if we've already done the session check.
 
 
 def _save_session_token(token: str) -> bool:
-    """Save session token to URL query params for persistence across refreshes.
+    """Save session token to browser localStorage.
 
     Args:
         token: Session token to save.
 
     Returns:
-        True if save was successful.
+        True if save was initiated.
     """
     try:
-        st.query_params[SESSION_PARAM_KEY] = token
+        from streamlit_js_eval import streamlit_js_eval
+
+        # Use incrementing key to force component re-render each time
+        if "_session_save_counter" not in st.session_state:
+            st.session_state._session_save_counter = 0
+        st.session_state._session_save_counter += 1
+
+        js_code = f"""
+        (function() {{
+            try {{
+                window.parent.localStorage.setItem('{SESSION_STORAGE_KEY}', '{token}');
+                console.log('[ChurnPilot] Session token saved to localStorage');
+                return true;
+            }} catch (e) {{
+                console.error('[ChurnPilot] Session save error:', e);
+                return false;
+            }}
+        }})()
+        """
+
+        streamlit_js_eval(
+            js_expressions=js_code,
+            key=f"session_save_{st.session_state._session_save_counter}"
+        )
         return True
+
     except Exception as e:
         print(f"[Session] Save error: {e}")
         return False
 
 
 def _load_session_token() -> str | None:
-    """Load session token from URL query params.
+    """Load session token from browser localStorage.
 
     Returns:
         Session token if found, None otherwise.
+        Returns None on first render (streamlit_js_eval needs a rerun to return values).
     """
     try:
-        token = st.query_params.get(SESSION_PARAM_KEY)
-        return token if token else None
+        from streamlit_js_eval import streamlit_js_eval
+
+        js_code = f"""
+        (function() {{
+            try {{
+                var token = window.parent.localStorage.getItem('{SESSION_STORAGE_KEY}');
+                console.log('[ChurnPilot] Loading session:', token ? 'found' : 'not found');
+                return token || null;
+            }} catch (e) {{
+                console.error('[ChurnPilot] Session load error:', e);
+                return null;
+            }}
+        }})()
+        """
+
+        # Use stable key so streamlit_js_eval caches the result across reruns
+        result = streamlit_js_eval(js_expressions=js_code, key="session_loader")
+        return result
+
     except Exception as e:
         print(f"[Session] Load error: {e}")
         return None
 
 
 def _clear_session_token() -> bool:
-    """Clear session token from URL query params.
+    """Clear session token from browser localStorage.
 
     Returns:
-        True if clear was successful.
+        True if clear was initiated.
     """
     try:
-        if SESSION_PARAM_KEY in st.query_params:
-            del st.query_params[SESSION_PARAM_KEY]
+        from streamlit_js_eval import streamlit_js_eval
+
+        if "_session_clear_counter" not in st.session_state:
+            st.session_state._session_clear_counter = 0
+        st.session_state._session_clear_counter += 1
+
+        js_code = f"""
+        (function() {{
+            try {{
+                window.parent.localStorage.removeItem('{SESSION_STORAGE_KEY}');
+                console.log('[ChurnPilot] Session token cleared from localStorage');
+                return true;
+            }} catch (e) {{
+                console.error('[ChurnPilot] Session clear error:', e);
+                return false;
+            }}
+        }})()
+        """
+
+        streamlit_js_eval(
+            js_expressions=js_code,
+            key=f"session_clear_{st.session_state._session_clear_counter}"
+        )
         return True
+
     except Exception as e:
         print(f"[Session] Clear error: {e}")
         return False
 
 
 def check_stored_session() -> bool:
-    """Check for stored session token and restore session if valid.
+    """Check for stored session token in localStorage and restore if valid.
 
-    This is called on page load to restore authentication from URL params.
-    Works synchronously — no JS component timing issues.
+    Uses a two-phase approach because streamlit_js_eval is async:
+    - Phase 1 (first render): JS component mounts, returns None. We wait.
+    - Phase 2 (rerun triggered by JS): Returns actual localStorage value.
 
     Returns:
         True if session was restored, False otherwise.
@@ -296,13 +715,18 @@ def check_stored_session() -> bool:
     if "user_id" in st.session_state:
         return True
 
-    # Check for session restoration in progress
+    # Skip if we already completed the session check
     if st.session_state.get("_session_check_done"):
         return False
 
     token = _load_session_token()
 
-    # No token found
+    # First render: streamlit_js_eval returns None (component hasn't mounted yet).
+    # We DON'T mark _session_check_done so we check again on next rerun.
+    if token is None:
+        return False
+
+    # Token found but wrong length — invalid, mark done
     if not token or len(token) != SESSION_TOKEN_BYTES * 2:
         st.session_state._session_check_done = True
         return False
@@ -319,21 +743,18 @@ def check_stored_session() -> bool:
         st.session_state._session_check_done = True
         return True
     else:
-        # Invalid/expired token - clear it
+        # Invalid/expired token — clear it from localStorage
         _clear_session_token()
         st.session_state._session_check_done = True
         return False
 
 
 def show_auth_page():
-    """Show login/register page.
+    """Show login/register page with branded design.
 
     Returns:
         True if user is authenticated, False otherwise.
     """
-    st.title("ChurnPilot")
-    st.markdown("AI-powered credit card churning management")
-
     # Initialize database schema and check connection
     try:
         init_database()
@@ -341,69 +762,106 @@ def show_auth_page():
         st.error(f"Database connection failed: {e}")
         return False
 
-    tab1, tab2 = st.tabs(["Login", "Register"])
+    # Centered auth layout
+    spacer_left, auth_col, spacer_right = st.columns([1, 2, 1])
 
-    auth = AuthService()
+    with auth_col:
+        # Branded header
+        st.markdown("""
+        <div class="auth-logo">
+            <div style="font-size: 3rem; margin-bottom: 8px;">💳</div>
+            <h1>ChurnPilot</h1>
+        </div>
+        <div class="auth-tagline">
+            Smart credit card management for maximizers
+        </div>
+        """, unsafe_allow_html=True)
 
-    with tab1:
-        st.subheader("Welcome back!")
+        tab1, tab2 = st.tabs(["Sign In", "Create Account"])
 
-        with st.form("login_form"):
-            email = st.text_input("Email", key="login_email")
-            password = st.text_input("Password", type="password", key="login_password")
-            submitted = st.form_submit_button("Login", use_container_width=True)
+        auth = AuthService()
 
-            if submitted:
-                if not email or not password:
-                    st.error("Please enter email and password")
-                else:
-                    user = auth.login(email, password)
-                    if user:
-                        # Create persistent session
-                        token = auth.create_session(user.id)
-                        st.session_state.user_id = str(user.id)
-                        st.session_state.user_email = user.email
-                        st.session_state.session_token = token
-                        # Save to browser localStorage for persistence across refresh
-                        _save_session_token(token)
-                        st.rerun()
+        with tab1:
+            with st.form("login_form"):
+                email = st.text_input("Email", key="login_email", placeholder="you@example.com")
+                password = st.text_input("Password", type="password", key="login_password", placeholder="••••••••")
+                st.write("")  # spacing
+                submitted = st.form_submit_button("Sign In", use_container_width=True, type="primary")
+
+                if submitted:
+                    if not email or not password:
+                        st.error("Please enter email and password")
                     else:
-                        st.error("Invalid email or password")
+                        user = auth.login(email, password)
+                        if user:
+                            # Create persistent session
+                            token = auth.create_session(user.id)
+                            st.session_state.user_id = str(user.id)
+                            st.session_state.user_email = user.email
+                            st.session_state.session_token = token
+                            # Save to browser localStorage for persistence across refresh
+                            _save_session_token(token)
+                            st.rerun()
+                        else:
+                            st.error("Invalid email or password")
 
-    with tab2:
-        st.subheader("Create an account")
+        with tab2:
+            with st.form("register_form"):
+                email = st.text_input("Email", key="register_email", placeholder="you@example.com")
+                password = st.text_input("Password", type="password", key="register_password", placeholder="Min 8 characters")
+                password_confirm = st.text_input("Confirm Password", type="password", key="register_password_confirm", placeholder="••••••••")
+                st.write("")  # spacing
+                submitted = st.form_submit_button("Create Account", use_container_width=True, type="primary")
 
-        with st.form("register_form"):
-            email = st.text_input("Email", key="register_email")
-            password = st.text_input("Password", type="password", key="register_password")
-            password_confirm = st.text_input("Confirm Password", type="password", key="register_password_confirm")
-            submitted = st.form_submit_button("Register", use_container_width=True)
+                if submitted:
+                    if not email:
+                        st.error("Please enter an email address")
+                    elif not validate_email(email):
+                        st.error("Please enter a valid email address")
+                    elif not password:
+                        st.error("Please enter a password")
+                    elif len(password) < MIN_PASSWORD_LENGTH:
+                        st.error(f"Password must be at least {MIN_PASSWORD_LENGTH} characters")
+                    elif password != password_confirm:
+                        st.error("Passwords do not match")
+                    else:
+                        try:
+                            user = auth.register(email, password)
+                            # Create persistent session
+                            token = auth.create_session(user.id)
+                            st.session_state.user_id = str(user.id)
+                            st.session_state.user_email = user.email
+                            st.session_state.session_token = token
+                            # Save to browser localStorage for persistence across refresh
+                            _save_session_token(token)
+                            st.success("Account created! Redirecting...")
+                            st.rerun()
+                        except ValueError as e:
+                            st.error(str(e))
 
-            if submitted:
-                if not email:
-                    st.error("Please enter an email address")
-                elif not validate_email(email):
-                    st.error("Please enter a valid email address")
-                elif not password:
-                    st.error("Please enter a password")
-                elif len(password) < MIN_PASSWORD_LENGTH:
-                    st.error(f"Password must be at least {MIN_PASSWORD_LENGTH} characters")
-                elif password != password_confirm:
-                    st.error("Passwords do not match")
-                else:
-                    try:
-                        user = auth.register(email, password)
-                        # Create persistent session
-                        token = auth.create_session(user.id)
-                        st.session_state.user_id = str(user.id)
-                        st.session_state.user_email = user.email
-                        st.session_state.session_token = token
-                        # Save to browser localStorage for persistence across refresh
-                        _save_session_token(token)
-                        st.success("Account created! Redirecting...")
-                        st.rerun()
-                    except ValueError as e:
-                        st.error(str(e))
+        # Feature highlights below auth form
+        st.markdown("""
+        <div style="margin-top: 32px; text-align: center; padding: 0 16px;">
+            <div style="display: flex; justify-content: center; gap: 32px; flex-wrap: wrap; margin-top: 16px;">
+                <div style="text-align: center;">
+                    <div style="font-size: 1.5rem;">🎯</div>
+                    <div style="font-size: 0.8rem; color: #64748b; font-weight: 600; margin-top: 4px;">Track SUBs</div>
+                </div>
+                <div style="text-align: center;">
+                    <div style="font-size: 1.5rem;">💰</div>
+                    <div style="font-size: 0.8rem; color: #64748b; font-weight: 600; margin-top: 4px;">Max Benefits</div>
+                </div>
+                <div style="text-align: center;">
+                    <div style="font-size: 1.5rem;">📊</div>
+                    <div style="font-size: 0.8rem; color: #64748b; font-weight: 600; margin-top: 4px;">5/24 Tracker</div>
+                </div>
+                <div style="text-align: center;">
+                    <div style="font-size: 1.5rem;">🤖</div>
+                    <div style="font-size: 0.8rem; color: #64748b; font-weight: 600; margin-top: 4px;">AI-Powered</div>
+                </div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
 
     return False
 
@@ -411,9 +869,23 @@ def show_auth_page():
 def show_user_menu():
     """Show user menu in sidebar."""
     with st.sidebar:
-        st.markdown(f"**Logged in as:** {st.session_state.user_email}")
+        # User avatar and email
+        user_initial = st.session_state.user_email[0].upper()
+        st.markdown(
+            f"""<div style="display: flex; align-items: center; gap: 10px; margin-bottom: 12px;">
+                <div style="width: 36px; height: 36px; border-radius: 50%; background: linear-gradient(135deg, #818cf8, #6366f1);
+                     display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 0.9rem; color: white;
+                     flex-shrink: 0;">{user_initial}</div>
+                <div style="overflow: hidden;">
+                    <div style="font-size: 0.8rem; color: #c7d2fe; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                        {st.session_state.user_email}
+                    </div>
+                </div>
+            </div>""",
+            unsafe_allow_html=True
+        )
 
-        if st.button("Logout", use_container_width=True):
+        if st.button("Sign Out", use_container_width=True):
             # Delete session from database
             if "session_token" in st.session_state:
                 auth = AuthService()
@@ -434,7 +906,7 @@ def show_user_menu():
                 old_pw = st.text_input("Current Password", type="password")
                 new_pw = st.text_input("New Password", type="password")
                 new_pw_confirm = st.text_input("Confirm New Password", type="password")
-                submitted = st.form_submit_button("Change Password")
+                submitted = st.form_submit_button("Update Password")
 
                 if submitted:
                     if not old_pw or not new_pw:
@@ -472,8 +944,13 @@ def init_session_state():
 def render_sidebar():
     """Render the sidebar with app info and quick stats."""
     with st.sidebar:
-        st.title("ChurnPilot")
-        st.caption("Credit Card Management")
+        st.markdown("""
+        <div style="margin-bottom: 4px;">
+            <span style="font-size: 1.5rem;">💳</span>
+            <span style="font-size: 1.4rem; font-weight: 800; color: #ffffff; letter-spacing: -0.03em; vertical-align: middle; margin-left: 6px;">ChurnPilot</span>
+        </div>
+        """, unsafe_allow_html=True)
+        st.caption("Credit Card Intelligence")
 
         # Quick stats - use demo cards if in demo mode
         if st.session_state.get("demo_mode"):
@@ -624,7 +1101,11 @@ def render_sidebar():
 
 def render_add_card_section():
     """Render the Add Card interface."""
-    st.header("Add Card")
+    st.markdown("""
+    <h2 style="margin-bottom: 0; display: flex; align-items: center; gap: 10px;">
+        <span style="font-size: 1.2rem;">➕</span> Add Card
+    </h2>
+    """, unsafe_allow_html=True)
 
     # Show success message if card was just added
     if st.session_state.get("card_add_success"):
@@ -1500,18 +1981,18 @@ def render_card_edit_form(card, editing_key: str):
 def get_issuer_color(issuer: str) -> str:
     """Get a color associated with a card issuer."""
     colors = {
-        "American Express": "#006FCF",
-        "Chase": "#124A8D",
+        "American Express": "#0077C0",
+        "Chase": "#1A6BB5",
         "Capital One": "#D03027",
-        "Citi": "#003B70",
+        "Citi": "#056DAE",
         "Discover": "#FF6600",
         "Bank of America": "#E31837",
         "Wells Fargo": "#D71E28",
         "US Bank": "#0C2340",
         "Barclays": "#00AEEF",
-        "Bilt": "#000000",
+        "Bilt": "#1a1a2e",
     }
-    return colors.get(issuer, "#666666")
+    return colors.get(issuer, "#6366f1")
 
 
 def render_card_item(card, show_issuer_header: bool = True, selection_mode: bool = False):
@@ -1658,10 +2139,11 @@ def render_card_item(card, show_issuer_header: bool = True, selection_mode: bool
         if card.signup_bonus and not card.sub_achieved:
             # Show reward at the top prominently
             st.markdown(
-                f"<div style='margin-bottom: 10px; padding: 8px 12px; background: linear-gradient(135deg, #e7f3ff 0%, #cfe9ff 100%); "
-                f"border-radius: 6px; border-left: 4px solid #0066cc;'>"
-                f"<span style='font-size: 0.85rem; color: #004085; font-weight: 500;'>🎁 REWARD</span><br>"
-                f"<span style='font-size: 1.1rem; color: #003366; font-weight: 700;'>{card.signup_bonus.points_or_cash}</span>"
+                f"<div style='margin-bottom: 10px; padding: 10px 14px; "
+                f"background: linear-gradient(135deg, #eef2ff 0%, #e0e7ff 100%); "
+                f"border-radius: 10px; border-left: 4px solid #6366f1;'>"
+                f"<span style='font-size: 0.75rem; color: #4f46e5; font-weight: 600; letter-spacing: 0.05em;'>🎁 REWARD</span><br>"
+                f"<span style='font-size: 1.1rem; color: #1e1b4b; font-weight: 700;'>{card.signup_bonus.points_or_cash}</span>"
                 f"</div>",
                 unsafe_allow_html=True
             )
@@ -1678,25 +2160,25 @@ def render_card_item(card, show_issuer_header: bool = True, selection_mode: bool
 
                     # Create visual progress bar with HTML/CSS
                     if progress >= 1.0:
-                        bar_color = "#28a745"
-                        text_color = "#155724"
+                        bar_color = "#10b981"
+                        text_color = "#065f46"
                     elif progress >= 0.75:
-                        bar_color = "#20c997"
-                        text_color = "#0c5460"
+                        bar_color = "#6366f1"
+                        text_color = "#3730a3"
                     elif progress >= 0.5:
-                        bar_color = "#ffc107"
-                        text_color = "#856404"
+                        bar_color = "#f59e0b"
+                        text_color = "#92400e"
                     else:
-                        bar_color = "#6c757d"
-                        text_color = "#383d41"
+                        bar_color = "#94a3b8"
+                        text_color = "#475569"
 
                     st.markdown(
-                        f"<div style='margin-bottom: 4px;'>"
-                        f"<span style='font-weight: 600; color: {text_color};'>Spending Progress: {progress_pct}%</span>"
-                        f"<span style='float: right; color: #6c757d;'>${card.sub_spend_progress:,.0f} / ${card.signup_bonus.spend_requirement:,.0f}</span>"
+                        f"<div style='margin-bottom: 6px;'>"
+                        f"<span style='font-weight: 600; font-size: 0.85rem; color: {text_color};'>Spending Progress: {progress_pct}%</span>"
+                        f"<span style='float: right; color: #64748b; font-size: 0.85rem;'>${card.sub_spend_progress:,.0f} / ${card.signup_bonus.spend_requirement:,.0f}</span>"
                         f"</div>"
-                        f"<div style='background: #e9ecef; border-radius: 4px; height: 8px; overflow: hidden;'><!-- no text content -->"
-                        f"<div style='background: {bar_color}; height: 100%; width: {progress_pct}%; transition: width 0.3s;'><!-- no text content --></div>"
+                        f"<div style='background: #e2e8f0; border-radius: 6px; height: 8px; overflow: hidden;'><!-- no text content -->"
+                        f"<div style='background: {bar_color}; height: 100%; width: {progress_pct}%; transition: width 0.4s ease; border-radius: 6px;'><!-- no text content --></div>"
                         f"</div>",
                         unsafe_allow_html=True
                     )
@@ -1739,10 +2221,10 @@ def render_card_item(card, show_issuer_header: bool = True, selection_mode: bool
         # Show unused benefits indicator (preview row)
         if unused_benefits > 0 and not is_all_snoozed:
             st.markdown(
-                f"<div style='background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%); "
-                f"padding: 10px 14px; border-radius: 8px; margin: 8px 0; "
-                f"border-left: 4px solid #ffc107; display: flex; justify-content: space-between; align-items: center;'>"
-                f"<span style='color: #856404; font-weight: 600;'>⚡ {unused_benefits} benefit(s) available this period</span>"
+                f"<div style='background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%); "
+                f"padding: 10px 14px; border-radius: 10px; margin: 8px 0; "
+                f"border-left: 4px solid #f59e0b; display: flex; justify-content: space-between; align-items: center;'>"
+                f"<span style='color: #92400e; font-weight: 600; font-size: 0.9rem;'>⚡ {unused_benefits} benefit(s) available this period</span>"
                 f"</div>",
                 unsafe_allow_html=True
             )
@@ -1756,9 +2238,9 @@ def render_card_item(card, show_issuer_header: bool = True, selection_mode: bool
             # Show option to unsnooze
             days_until_unsnooze = (card.benefits_reminder_snoozed_until - date.today()).days
             st.markdown(
-                f"<div style='background: #e9ecef; padding: 8px 14px; border-radius: 8px; margin: 8px 0; "
+                f"<div style='background: #f1f5f9; padding: 10px 14px; border-radius: 10px; margin: 8px 0; "
                 f"display: flex; justify-content: space-between; align-items: center;'>"
-                f"<span style='color: #6c757d; font-size: 0.9rem;'>🔕 Reminders snoozed ({days_until_unsnooze}d remaining)</span>"
+                f"<span style='color: #64748b; font-size: 0.85rem;'>🔕 Reminders snoozed ({days_until_unsnooze}d remaining)</span>"
                 f"</div>",
                 unsafe_allow_html=True
             )
@@ -1788,9 +2270,9 @@ def render_card_item(card, show_issuer_header: bool = True, selection_mode: bool
                 if card.signup_bonus:
                     if card.sub_achieved:
                         st.markdown(
-                            f"<div style='background: #d4edda; padding: 8px 12px; border-radius: 6px; border-left: 4px solid #28a745;'>"
-                            f"<span style='font-size: 0.8rem; color: #155724; font-weight: 500;'>✓ SUB EARNED</span><br>"
-                            f"<span style='color: #0c5c2c; font-weight: 600;'>{card.signup_bonus.points_or_cash}</span>"
+                            f"<div style='background: #ecfdf5; padding: 10px 14px; border-radius: 10px; border-left: 4px solid #10b981;'>"
+                            f"<span style='font-size: 0.75rem; color: #065f46; font-weight: 600; letter-spacing: 0.05em;'>✓ SUB EARNED</span><br>"
+                            f"<span style='color: #064e3b; font-weight: 700;'>{card.signup_bonus.points_or_cash}</span>"
                             f"</div>",
                             unsafe_allow_html=True
                         )
@@ -1866,8 +2348,8 @@ def render_card_item(card, show_issuer_header: bool = True, selection_mode: bool
 
                     # Total value summary
                     st.markdown(
-                        f"<div style='background: #e7f3ff; padding: 10px; border-radius: 6px; margin-top: 12px;'>"
-                        f"<span style='font-weight: 600; color: #004085;'>Annual Value: ~${total_value:,.0f}</span>"
+                        f"<div style='background: linear-gradient(135deg, #eef2ff, #e0e7ff); padding: 12px 14px; border-radius: 10px; margin-top: 12px;'>"
+                        f"<span style='font-weight: 700; color: #3730a3; font-size: 0.95rem;'>Annual Value: ~${total_value:,.0f}</span>"
                         f"</div>",
                         unsafe_allow_html=True
                     )
@@ -2013,9 +2495,13 @@ def render_dashboard():
         st.success(f"✓ Added: {st.session_state.card_just_added}")
         st.session_state.card_just_added = None  # Clear after showing
 
-    col_header, col_export = st.columns([3, 1])
+    col_header, col_export = st.columns([4, 1])
     with col_header:
-        st.header("Your Cards")
+        st.markdown("""
+        <h2 style="margin-bottom: 0; display: flex; align-items: center; gap: 10px;">
+            <span style="font-size: 1.2rem;">📋</span> Your Cards
+        </h2>
+        """, unsafe_allow_html=True)
     with col_export:
         st.write("")  # Spacing
 
@@ -2294,7 +2780,11 @@ def render_dashboard():
 
 def render_action_required_tab():
     """Render the Action Required tab showing urgent items."""
-    st.header("Action Required")
+    st.markdown("""
+    <h2 style="margin-bottom: 0; display: flex; align-items: center; gap: 10px;">
+        <span style="font-size: 1.2rem;">🔔</span> Action Required
+    </h2>
+    """, unsafe_allow_html=True)
 
     # Use demo cards if in demo mode
     if st.session_state.get("demo_mode"):
@@ -2386,23 +2876,30 @@ def render_action_required_tab():
             days = item["days_left"]
             if days < 0:
                 urgency = "EXPIRED"
-                color = "#dc3545"
+                color = "#ef4444"
+                bg = "#fef2f2"
             elif days <= 7:
                 urgency = "URGENT"
-                color = "#dc3545"
+                color = "#ef4444"
+                bg = "#fef2f2"
             elif days <= 14:
                 urgency = "SOON"
-                color = "#fd7e14"
+                color = "#f59e0b"
+                bg = "#fffbeb"
             else:
                 urgency = "ATTENTION"
-                color = "#ffc107"
+                color = "#f59e0b"
+                bg = "#fffbeb"
 
             st.markdown(
-                f"<div style='padding: 12px; margin: 8px 0; border-left: 4px solid {color}; background: #f8f9fa; border-radius: 4px; color: #262730;'>"
-                f"<span style='font-weight: 600;'>[{urgency}] {item['display_name']}</span><br>"
-                f"<span style='color: #6c757d; font-size: 0.9rem;'>"
-                f"Deadline: {item['deadline']} ({days} days) | "
-                f"Requirement: ${item['requirement']:,.0f} | "
+                f"<div style='padding: 14px 16px; margin: 8px 0; border-left: 4px solid {color}; background: {bg}; border-radius: 10px; color: #1a1a2e;'>"
+                f"<div style='display: flex; align-items: center; gap: 8px; margin-bottom: 4px;'>"
+                f"<span style='font-size: 0.7rem; font-weight: 700; background: {color}; color: white; padding: 2px 8px; border-radius: 4px; letter-spacing: 0.05em;'>{urgency}</span>"
+                f"<span style='font-weight: 600;'>{item['display_name']}</span>"
+                f"</div>"
+                f"<span style='color: #64748b; font-size: 0.85rem;'>"
+                f"Deadline: {item['deadline']} ({days}d) · "
+                f"Spend: ${item['requirement']:,.0f} · "
                 f"Reward: {item['reward']}"
                 f"</span>"
                 f"</div>",
@@ -2419,17 +2916,20 @@ def render_action_required_tab():
         for item in upcoming_fees:
             days = item["days_until"]
             if days <= 14:
-                color = "#dc3545"
+                color = "#ef4444"
+                bg = "#fef2f2"
             elif days <= 30:
-                color = "#fd7e14"
+                color = "#f59e0b"
+                bg = "#fffbeb"
             else:
-                color = "#ffc107"
+                color = "#6366f1"
+                bg = "#eef2ff"
 
             st.markdown(
-                f"<div style='padding: 12px; margin: 8px 0; border-left: 4px solid {color}; background: #f8f9fa; border-radius: 4px; color: #262730;'>"
+                f"<div style='padding: 14px 16px; margin: 8px 0; border-left: 4px solid {color}; background: {bg}; border-radius: 10px; color: #1a1a2e;'>"
                 f"<span style='font-weight: 600;'>{item['display_name']}</span><br>"
-                f"<span style='color: #6c757d; font-size: 0.9rem;'>"
-                f"Fee: ${item['amount']:.0f} | Due: {item['fee_date']} ({days} days)"
+                f"<span style='color: #64748b; font-size: 0.85rem;'>"
+                f"Fee: ${item['amount']:.0f} · Due: {item['fee_date']} ({days}d)"
                 f"</span>"
                 f"</div>",
                 unsafe_allow_html=True
@@ -2497,15 +2997,20 @@ def render_action_required_tab():
 
         for item in missing_data:
             st.markdown(
-                f"<div style='padding: 8px; margin: 4px 0; border-left: 3px solid #6c757d; background: #f8f9fa; border-radius: 4px; color: #262730;'>"
-                f"<span style='font-weight: 500;'>{item['display_name']}</span> - No opened date"
+                f"<div style='padding: 10px 14px; margin: 4px 0; border-left: 3px solid #94a3b8; background: #f8fafc; border-radius: 10px; color: #1a1a2e;'>"
+                f"<span style='font-weight: 600;'>{item['display_name']}</span>"
+                f"<span style='color: #64748b; font-size: 0.85rem;'> — Missing opened date</span>"
                 f"</div>",
                 unsafe_allow_html=True
             )
 
 def render_five_twenty_four_tab():
     """Render the 5/24 tracking tab."""
-    st.header("Chase 5/24 Rule Tracker")
+    st.markdown("""
+    <h2 style="margin-bottom: 0; display: flex; align-items: center; gap: 10px;">
+        <span style="font-size: 1.2rem;">📊</span> Chase 5/24 Rule Tracker
+    </h2>
+    """, unsafe_allow_html=True)
 
     # Use demo cards if in demo mode
     if st.session_state.get("demo_mode"):
@@ -2594,16 +3099,19 @@ def render_five_twenty_four_tab():
 
         # Color code by urgency
         if days <= 30:
-            color = "#28a745"  # Green - drops soon
+            color = "#10b981"  # Green - drops soon
+            bg = "#ecfdf5"
         elif days <= 180:
-            color = "#ffc107"  # Yellow
+            color = "#f59e0b"  # Yellow
+            bg = "#fffbeb"
         else:
-            color = "#6c757d"  # Gray
+            color = "#94a3b8"  # Gray
+            bg = "#f8fafc"
 
         st.markdown(
-            f"<div style='padding: 12px; margin: 8px 0; border-left: 4px solid {color}; background: #f8f9fa; border-radius: 4px; color: #262730;'>"
+            f"<div style='padding: 14px 16px; margin: 8px 0; border-left: 4px solid {color}; background: {bg}; border-radius: 10px; color: #1a1a2e;'>"
             f"<span style='font-weight: 600;'>{display_name}</span><br>"
-            f"<span style='color: #6c757d; font-size: 0.9rem;'>Opened: {card.opened_date} | Drops off: {drop_off} ({days} days)</span>"
+            f"<span style='color: #64748b; font-size: 0.85rem;'>Opened: {card.opened_date} · Drops off: {drop_off} ({days}d)</span>"
             f"</div>",
             unsafe_allow_html=True
         )
@@ -2612,9 +3120,10 @@ def render_five_twenty_four_tab():
 def main():
     """Main application entry point."""
     st.set_page_config(
-        page_title="ChurnPilot",
+        page_title="ChurnPilot — Credit Card Intelligence",
         page_icon="💳",
         layout="wide",
+        initial_sidebar_state="expanded",
     )
 
     # Inject custom CSS (both app-specific and component CSS)

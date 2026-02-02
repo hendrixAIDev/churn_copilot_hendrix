@@ -98,16 +98,19 @@ class SpreadsheetImporter:
         if api_key:
             self.api_key = api_key
         else:
-            # Try Streamlit secrets first (for cloud deployment)
-            try:
-                import streamlit as st
-                self.api_key = st.secrets.get("ANTHROPIC_API_KEY")
-            except:
-                # Fall back to environment variable (for local development)
-                self.api_key = os.getenv("ANTHROPIC_API_KEY")
+            # Try environment variable first (platform-independent)
+            self.api_key = os.getenv("ANTHROPIC_API_KEY")
+            
+            if not self.api_key:
+                # Fall back to Streamlit secrets (if Streamlit is available)
+                try:
+                    import streamlit as st
+                    self.api_key = st.secrets.get("ANTHROPIC_API_KEY")
+                except:
+                    pass
 
         if not self.api_key:
-            raise ValueError("ANTHROPIC_API_KEY not found in Streamlit secrets or environment")
+            raise ValueError("ANTHROPIC_API_KEY not found in environment or Streamlit secrets")
 
         # Lazy import Anthropic SDK (saves ~7s on app startup)
         import anthropic
