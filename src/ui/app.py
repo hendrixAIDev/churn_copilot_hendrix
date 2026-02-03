@@ -4,16 +4,23 @@ import streamlit as st
 from datetime import date, datetime, timedelta
 import sys
 from pathlib import Path
-# Session persistence via localStorage (streamlit_js_eval).
-# streamlit_js_eval accesses the parent page's localStorage via window.parent,
-# bypassing Streamlit's iframe sandbox. This enables true session persistence:
-# - Survives browser refresh ✅
-# - Survives typing URL directly ✅ (token lives in browser storage, not URL)
-# - Survives bookmarks ✅ (no token in URL to leak)
-# - Clean URLs ✅ (no ?s= query param needed)
+# Session persistence via query params.
+# Query params persist across:
+# - Same-tab refresh ✅ (Streamlit preserves query params)
+# - New tab navigation ✅ (if user copies full URL with ?s= param)
+# - Bookmarks ✅ (token embedded in URL)
+#
+# Security: Session tokens are validated server-side and expire after 24h.
+# Tokens are 64-character hex strings (32 bytes of entropy).
+#
+# Why query params instead of localStorage:
+# - No JavaScript timing issues (streamlit_js_eval components get destroyed before execution)
+# - Simpler implementation (no two-phase loading)
+# - Works immediately without component mount delays
+# - More reliable across Streamlit's rendering lifecycle
 
-# Session token storage key in localStorage
-SESSION_STORAGE_KEY = "churnpilot_session"
+# Query param key for session token
+SESSION_QUERY_PARAM = "s"
 
 # Custom CSS for cleaner UI — ChurnPilot Design System v2
 CUSTOM_CSS = """
@@ -573,140 +580,23 @@ Credits and Benefits:
 - Global Entry/TSA PreCheck fee credit ($100 every 4 years)
 """
 
-# ==================== SESSION TOKEN PERSISTENCE (localStorage) ====================
-#
-# Uses streamlit_js_eval to access the parent page's localStorage via window.parent.
-# This is the key insight from the experiment branch: streamlit_js_eval's JS
-# runs in a context that CAN access window.parent, unlike regular Streamlit
-# components which are sandboxed in iframes.
+# ==================== SESSION TOKEN PERSISTENCE (Query Params) ====================
 #
 # Flow:
-# 1. On login/register: save token to localStorage + st.session_state
-# 2. On page load: read token from localStorage, validate against DB
-# 3. On logout: clear localStorage + DB session + st.session_state
+# 1. On login/register: save token to DB + set query param ?s=<token>
+# 2. On page load: read token from query params, validate against DB
+# 3. On logout: clear query params + delete DB session
 #
-# Two-phase loading:
-# - Phase 1 (first render): streamlit_js_eval component mounts, returns None
-# - Phase 2 (rerun): JS returns the actual localStorage value
-# We handle this by checking if we've already done the session check.
-
-
-def _save_session_token(token: str) -> bool:
-    """Save session token to browser localStorage.
-
-    Args:
-        token: Session token to save.
-
-    Returns:
-        True if save was initiated.
-    """
-    try:
-        from streamlit_js_eval import streamlit_js_eval
-
-        # Use incrementing key to force component re-render each time
-        if "_session_save_counter" not in st.session_state:
-            st.session_state._session_save_counter = 0
-        st.session_state._session_save_counter += 1
-
-        js_code = f"""
-        (function() {{
-            try {{
-                window.parent.localStorage.setItem('{SESSION_STORAGE_KEY}', '{token}');
-                console.log('[ChurnPilot] Session token saved to localStorage');
-                return true;
-            }} catch (e) {{
-                console.error('[ChurnPilot] Session save error:', e);
-                return false;
-            }}
-        }})()
-        """
-
-        streamlit_js_eval(
-            js_expressions=js_code,
-            key=f"session_save_{st.session_state._session_save_counter}"
-        )
-        return True
-
-    except Exception as e:
-        print(f"[Session] Save error: {e}")
-        return False
-
-
-def _load_session_token() -> str | None:
-    """Load session token from browser localStorage.
-
-    Returns:
-        Session token if found, None otherwise.
-        Returns None on first render (streamlit_js_eval needs a rerun to return values).
-    """
-    try:
-        from streamlit_js_eval import streamlit_js_eval
-
-        js_code = f"""
-        (function() {{
-            try {{
-                var token = window.parent.localStorage.getItem('{SESSION_STORAGE_KEY}');
-                console.log('[ChurnPilot] Loading session:', token ? 'found' : 'not found');
-                return token || null;
-            }} catch (e) {{
-                console.error('[ChurnPilot] Session load error:', e);
-                return null;
-            }}
-        }})()
-        """
-
-        # Use stable key so streamlit_js_eval caches the result across reruns
-        result = streamlit_js_eval(js_expressions=js_code, key="session_loader")
-        return result
-
-    except Exception as e:
-        print(f"[Session] Load error: {e}")
-        return None
-
-
-def _clear_session_token() -> bool:
-    """Clear session token from browser localStorage.
-
-    Returns:
-        True if clear was initiated.
-    """
-    try:
-        from streamlit_js_eval import streamlit_js_eval
-
-        if "_session_clear_counter" not in st.session_state:
-            st.session_state._session_clear_counter = 0
-        st.session_state._session_clear_counter += 1
-
-        js_code = f"""
-        (function() {{
-            try {{
-                window.parent.localStorage.removeItem('{SESSION_STORAGE_KEY}');
-                console.log('[ChurnPilot] Session token cleared from localStorage');
-                return true;
-            }} catch (e) {{
-                console.error('[ChurnPilot] Session clear error:', e);
-                return false;
-            }}
-        }})()
-        """
-
-        streamlit_js_eval(
-            js_expressions=js_code,
-            key=f"session_clear_{st.session_state._session_clear_counter}"
-        )
-        return True
-
-    except Exception as e:
-        print(f"[Session] Clear error: {e}")
-        return False
+# This approach is simpler and more reliable than localStorage because:
+# - No JavaScript component timing issues
+# - No two-phase loading needed
+# - Works immediately on page load
+# - Survives same-tab refresh (Streamlit preserves query params)
+# - Survives new tab navigation if user copies full URL
 
 
 def check_stored_session() -> bool:
-    """Check for stored session token in localStorage and restore if valid.
-
-    Uses a two-phase approach because streamlit_js_eval is async:
-    - Phase 1 (first render): JS component mounts, returns None. We wait.
-    - Phase 2 (rerun triggered by JS): Returns actual localStorage value.
+    """Check for stored session token in query params and restore if valid.
 
     Returns:
         True if session was restored, False otherwise.
@@ -719,15 +609,16 @@ def check_stored_session() -> bool:
     if st.session_state.get("_session_check_done"):
         return False
 
-    token = _load_session_token()
+    # Get token from query params
+    token = st.query_params.get(SESSION_QUERY_PARAM)
 
-    # First render: streamlit_js_eval returns None (component hasn't mounted yet).
-    # We DON'T mark _session_check_done so we check again on next rerun.
-    if token is None:
+    # No token in URL
+    if not token:
+        st.session_state._session_check_done = True
         return False
 
-    # Token found but wrong length — invalid, mark done
-    if not token or len(token) != SESSION_TOKEN_BYTES * 2:
+    # Token found but wrong length — invalid
+    if len(token) != SESSION_TOKEN_BYTES * 2:
         st.session_state._session_check_done = True
         return False
 
@@ -743,8 +634,8 @@ def check_stored_session() -> bool:
         st.session_state._session_check_done = True
         return True
     else:
-        # Invalid/expired token — clear it from localStorage
-        _clear_session_token()
+        # Invalid/expired token — clear it from query params
+        st.query_params.clear()
         st.session_state._session_check_done = True
         return False
 
@@ -799,8 +690,9 @@ def show_auth_page():
                             st.session_state.user_id = str(user.id)
                             st.session_state.user_email = user.email
                             st.session_state.session_token = token
-                            # Save to browser localStorage for persistence across refresh
-                            _save_session_token(token)
+                            # Save token to query params for persistence
+                            st.query_params[SESSION_QUERY_PARAM] = token
+                            # Rerun to refresh with authenticated state
                             st.rerun()
                         else:
                             st.error("Invalid email or password")
@@ -832,8 +724,9 @@ def show_auth_page():
                             st.session_state.user_id = str(user.id)
                             st.session_state.user_email = user.email
                             st.session_state.session_token = token
-                            # Save to browser localStorage for persistence across refresh
-                            _save_session_token(token)
+                            # Save token to query params for persistence
+                            st.query_params[SESSION_QUERY_PARAM] = token
+                            # Rerun to refresh with authenticated state
                             st.success("Account created! Redirecting...")
                             st.rerun()
                         except ValueError as e:
@@ -891,8 +784,8 @@ def show_user_menu():
                 auth = AuthService()
                 auth.delete_session(st.session_state.session_token)
                 del st.session_state.session_token
-            # Clear browser localStorage
-            _clear_session_token()
+            # Clear query params
+            st.query_params.clear()
             # Clear session state
             del st.session_state.user_id
             del st.session_state.user_email

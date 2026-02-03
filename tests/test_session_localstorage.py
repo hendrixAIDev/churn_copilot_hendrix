@@ -184,17 +184,41 @@ class TestCheckStoredSession:
 
     @patch("src.ui.app._load_session_token")
     @patch("src.ui.app.st")
-    def test_returns_false_on_first_render(self, mock_st, mock_load):
-        """Should return False when JS returns None (first render)."""
+    def test_triggers_rerun_on_first_render(self, mock_st, mock_load):
+        """Should trigger rerun when JS returns None (component mounting)."""
         mock_st.session_state = MockSessionState()
+        # st.rerun() raises an exception to stop execution
+        mock_st.rerun = MagicMock(side_effect=Exception("Streamlit rerun"))
+        mock_load.return_value = None
+
+        from src.ui.app import check_stored_session
+
+        # First call should trigger rerun (which raises exception)
+        with pytest.raises(Exception, match="Streamlit rerun"):
+            check_stored_session()
+        
+        # Should set rerun flag and call st.rerun()
+        assert mock_st.session_state.get("_session_check_rerun_attempted") is True
+        mock_st.rerun.assert_called_once()
+        # Should NOT mark _session_check_done yet (rerun in progress)
+        assert "_session_check_done" not in mock_st.session_state
+
+    @patch("src.ui.app._load_session_token")
+    @patch("src.ui.app.st")
+    def test_marks_done_after_rerun_still_none(self, mock_st, mock_load):
+        """Should mark done when token still None after rerun (localStorage empty)."""
+        mock_st.session_state = MockSessionState({"_session_check_rerun_attempted": True})
+        mock_st.rerun = MagicMock()
         mock_load.return_value = None
 
         from src.ui.app import check_stored_session
 
         result = check_stored_session()
         assert result is False
-        # Should NOT mark _session_check_done (need to retry on rerun)
-        assert "_session_check_done" not in mock_st.session_state
+        # Should mark done (localStorage genuinely empty)
+        assert mock_st.session_state.get("_session_check_done") is True
+        # Should NOT call rerun again (prevents infinite loop)
+        mock_st.rerun.assert_not_called()
 
     @patch("src.ui.app._load_session_token")
     @patch("src.ui.app.st")
