@@ -497,6 +497,10 @@ from src.core import (
 from src.core.preferences import PreferencesStorage, UserPreferences
 from src.core.exceptions import ExtractionError, StorageError, FetchError
 from src.core.auth import AuthService, validate_email, validate_password, MIN_PASSWORD_LENGTH, SESSION_TOKEN_BYTES
+from extra_streamlit_components import CookieManager
+
+# Cookie key for session token (survives browser close, unlike query params)
+SESSION_COOKIE_KEY = "churnpilot_session"
 from src.core.db_storage import DatabaseStorage
 from src.core.database import check_connection, init_database
 from datetime import timedelta
@@ -595,8 +599,19 @@ Credits and Benefits:
 # - Survives new tab navigation if user copies full URL
 
 
+def get_cookie_manager():
+    """Get or create a CookieManager instance."""
+    if "_cookie_manager" not in st.session_state:
+        st.session_state._cookie_manager = CookieManager()
+    return st.session_state._cookie_manager
+
+
 def check_stored_session() -> bool:
-    """Check for stored session token in query params and restore if valid.
+    """Check for stored session token in cookies/query params and restore if valid.
+
+    Priority order:
+    1. Query params (for same-tab refresh compatibility)
+    2. Cookies (for fresh URL navigation after browser close)
 
     Returns:
         True if session was restored, False otherwise.
@@ -609,10 +624,19 @@ def check_stored_session() -> bool:
     if st.session_state.get("_session_check_done"):
         return False
 
-    # Get token from query params
+    # Try to get token from query params first
     token = st.query_params.get(SESSION_QUERY_PARAM)
 
-    # No token in URL
+    # If no query param, check cookies (for fresh URL navigation)
+    if not token:
+        cookie_manager = get_cookie_manager()
+        token = cookie_manager.get(SESSION_COOKIE_KEY)
+        
+        # If found in cookie but not in query params, add to query params for consistency
+        if token and len(token) == SESSION_TOKEN_BYTES * 2:
+            st.query_params[SESSION_QUERY_PARAM] = token
+
+    # No token anywhere
     if not token:
         st.session_state._session_check_done = True
         return False
@@ -634,8 +658,13 @@ def check_stored_session() -> bool:
         st.session_state._session_check_done = True
         return True
     else:
-        # Invalid/expired token — clear it from query params
+        # Invalid/expired token — clear from both query params and cookies
         st.query_params.clear()
+        try:
+            cookie_manager = get_cookie_manager()
+            cookie_manager.delete(SESSION_COOKIE_KEY)
+        except Exception:
+            pass  # Cookie deletion is best-effort
         st.session_state._session_check_done = True
         return False
 
@@ -692,6 +721,12 @@ def show_auth_page():
                             st.session_state.session_token = token
                             # Save token to query params for persistence
                             st.query_params[SESSION_QUERY_PARAM] = token
+                            # Save token to cookie for fresh URL navigation
+                            try:
+                                cookie_manager = get_cookie_manager()
+                                cookie_manager.set(SESSION_COOKIE_KEY, token, expires_at=None)
+                            except Exception:
+                                pass  # Cookie setting is best-effort
                             # Rerun to refresh with authenticated state
                             st.rerun()
                         else:
@@ -726,6 +761,12 @@ def show_auth_page():
                             st.session_state.session_token = token
                             # Save token to query params for persistence
                             st.query_params[SESSION_QUERY_PARAM] = token
+                            # Save token to cookie for fresh URL navigation
+                            try:
+                                cookie_manager = get_cookie_manager()
+                                cookie_manager.set(SESSION_COOKIE_KEY, token, expires_at=None)
+                            except Exception:
+                                pass  # Cookie setting is best-effort
                             # Rerun to refresh with authenticated state
                             st.success("Account created! Redirecting...")
                             st.rerun()
@@ -786,6 +827,12 @@ def show_user_menu():
                 del st.session_state.session_token
             # Clear query params
             st.query_params.clear()
+            # Clear session cookie
+            try:
+                cookie_manager = get_cookie_manager()
+                cookie_manager.delete(SESSION_COOKIE_KEY)
+            except Exception:
+                pass  # Cookie deletion is best-effort
             # Clear session state
             del st.session_state.user_id
             del st.session_state.user_email
@@ -1020,7 +1067,7 @@ def render_add_card_section():
         # Group templates by issuer for better organization
         issuers = sorted(set(t.issuer for t in templates))
 
-        col1, col2 = st.columns([3, 2])
+        col1, col2 = st.columns([1, 2])
 
         with col1:
             # Filter by issuer first
@@ -1055,17 +1102,27 @@ def render_add_card_section():
                 total_credits_value += sum(c.amount * 4 for c in template.credits if c.frequency == 'quarterly')
                 total_credits_value += sum(c.amount * 2 for c in template.credits if c.frequency == 'semi-annually')
 
-                # Show card preview with value proposition
-                if template.annual_fee > 0 and total_credits_value > 0:
-                    net_value = total_credits_value - template.annual_fee
-                    if net_value > 0:
-                        st.markdown(f"**{template.name}** — ${template.annual_fee}/yr fee | ~${total_credits_value:,.0f}/yr credits | **+${net_value:,.0f} net**")
-                    else:
-                        st.markdown(f"**{template.name}** — ${template.annual_fee}/yr fee | ~${total_credits_value:,.0f}/yr credits")
-                elif total_credits_value > 0:
-                    st.markdown(f"**{template.name}** — No annual fee | ~${total_credits_value:,.0f}/yr credits")
+                # Show card preview with value proposition - clean, consistent format
+                st.markdown(f"### {template.name}")
+                
+                # Build value metrics row
+                metrics_parts = []
+                if template.annual_fee > 0:
+                    metrics_parts.append(f"💵 **${template.annual_fee:,}/yr** fee")
                 else:
-                    st.markdown(f"**{template.name}** — ${template.annual_fee}/yr" if template.annual_fee > 0 else f"**{template.name}** — No annual fee")
+                    metrics_parts.append("✨ **No annual fee**")
+                
+                if total_credits_value > 0:
+                    metrics_parts.append(f"🎁 **~${total_credits_value:,.0f}/yr** in credits")
+                    
+                    if template.annual_fee > 0:
+                        net_value = total_credits_value - template.annual_fee
+                        if net_value > 0:
+                            metrics_parts.append(f"📈 **+${net_value:,.0f}** net value")
+                        elif net_value < 0:
+                            metrics_parts.append(f"📉 **-${abs(net_value):,.0f}** net cost")
+                
+                st.caption(" · ".join(metrics_parts))
 
                 col1, col2 = st.columns(2)
                 with col1:
@@ -2250,16 +2307,22 @@ def render_card_item(card, show_issuer_header: bool = True, selection_mode: bool
         st.write("")  # Spacing
 
 
+def go_to_add_card():
+    """Navigate to the Add Card tab."""
+    st.session_state.navigate_to_add_card = True
+
+
 def render_empty_dashboard():
     """Render a welcoming empty state when no cards exist."""
     templates = get_all_templates()
 
-    # Use the new EmptyState component
+    # Use the new EmptyState component with callback to navigate to Add Card tab
     render_empty_state(
         illustration="cards",
         title="Welcome to ChurnPilot!",
         description=f"Start tracking your credit cards to manage benefits and deadlines. Library includes {len(templates)} popular card templates ready to use.",
-        action_label="Add Your First Card",
+        action_label="➕ Add Your First Card",
+        action_callback=go_to_add_card,
         key="empty_dashboard_add_card",
     )
 
@@ -2267,9 +2330,8 @@ def render_empty_dashboard():
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
         st.markdown("**Quick start:**")
-        st.markdown("1. Switch to the **Add Card** tab above")
-        st.markdown("2. Select from library, extract from URL, or import a spreadsheet")
-        st.markdown("3. Track your credits and signup bonus deadlines")
+        st.markdown("Click the button above or the **Add Card** tab to get started!")
+        st.markdown("")
 
         # Popular cards quick suggestions
         st.divider()
@@ -3093,6 +3155,16 @@ def main():
             st.rerun()
 
         # Don't show tabs yet for completely new users - just the hero
+        return
+
+    # Check if user clicked "Add Your First Card" button - show Add Card section directly
+    if st.session_state.get("navigate_to_add_card"):
+        st.session_state.navigate_to_add_card = False
+        st.info("💡 **Add your first card below!** Select from the library, paste a URL, or import a spreadsheet.")
+        render_add_card_section()
+        st.divider()
+        if st.button("← Back to Dashboard", key="back_from_add_card"):
+            st.rerun()
         return
 
     # Four main tabs (reordered: Dashboard -> Action Required -> Add Card -> 5/24 Tracker)
