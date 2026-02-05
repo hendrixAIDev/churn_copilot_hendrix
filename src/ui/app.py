@@ -3633,7 +3633,7 @@ def show_legal_page(page_type):
         page_type: "privacy" or "terms"
     """
     # Read the markdown file
-    pages_dir = Path(__file__).parent.parent / "pages"
+    pages_dir = Path(__file__).parent.parent.parent / "pages"
     if page_type == "privacy":
         file_path = pages_dir / "privacy_policy.md"
         title = "Privacy Policy"
