@@ -1,23 +1,26 @@
 """Database connection pooling for ChurnPilot.
 
-Uses psycopg2's ThreadedConnectionPool with Streamlit's @st.cache_resource
+Uses psycopg2's ThreadedConnectionPool with a module-level singleton
 to maintain a persistent connection pool across Streamlit reruns.
 """
 
-import streamlit as st
 from psycopg2.pool import ThreadedConnectionPool, PoolError
 from typing import Optional
 import logging
+import threading
 
 logger = logging.getLogger(__name__)
 
+# Module-level singleton for connection pool
+_pool: Optional[ThreadedConnectionPool] = None
+_pool_lock = threading.Lock()
 
-@st.cache_resource
+
 def get_connection_pool(database_url: str, minconn: int = 1, maxconn: int = 5) -> Optional[ThreadedConnectionPool]:
     """Get or create a connection pool.
     
-    This function is cached by Streamlit to persist the pool across reruns.
-    The pool is thread-safe and suitable for Streamlit Cloud's single-worker setup.
+    Uses a module-level singleton pattern to persist the pool across reruns.
+    Thread-safe and suitable for Streamlit Cloud's single-worker setup.
     
     Args:
         database_url: PostgreSQL connection URL.
@@ -27,16 +30,29 @@ def get_connection_pool(database_url: str, minconn: int = 1, maxconn: int = 5) -
     Returns:
         ThreadedConnectionPool instance, or None if creation fails.
     """
-    try:
-        logger.info(f"Creating connection pool (minconn={minconn}, maxconn={maxconn})")
-        return ThreadedConnectionPool(
-            minconn=minconn,
-            maxconn=maxconn,
-            dsn=database_url
-        )
-    except Exception as e:
-        logger.error(f"Failed to create connection pool: {e}")
-        return None
+    global _pool
+    
+    # Return existing pool if available
+    if _pool is not None:
+        return _pool
+    
+    # Create new pool (thread-safe)
+    with _pool_lock:
+        # Double-check after acquiring lock
+        if _pool is not None:
+            return _pool
+        
+        try:
+            logger.info(f"Creating connection pool (minconn={minconn}, maxconn={maxconn})")
+            _pool = ThreadedConnectionPool(
+                minconn=minconn,
+                maxconn=maxconn,
+                dsn=database_url
+            )
+            return _pool
+        except Exception as e:
+            logger.error(f"Failed to create connection pool: {e}")
+            return None
 
 
 def get_pool_stats(pool: ThreadedConnectionPool) -> dict:
