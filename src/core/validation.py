@@ -171,6 +171,29 @@ def validate_card_name(name: str, existing_names: list[str]) -> ValidationResult
     return "ok"
 
 
+def validate_text_length(text: str | None, field_name: str, max_length: int) -> ValidationResult:
+    """Validate text length against maximum.
+
+    Args:
+        text: The text to validate (can be None).
+        field_name: Name of the field for error messages.
+        max_length: Maximum allowed length in characters.
+
+    Returns:
+        ValidationResult indicating if text length is valid.
+    """
+    if text is None or len(text) == 0:
+        return "ok"
+    
+    if len(text) > max_length:
+        return ValidationError(
+            f"{field_name} is too long ({len(text)}/{max_length} chars). "
+            f"Please shorten your input."
+        )
+    
+    return "ok"
+
+
 def has_errors(results: list[ValidationResult]) -> bool:
     """Check if any validation results contain errors.
 

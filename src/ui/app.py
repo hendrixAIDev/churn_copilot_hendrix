@@ -1071,9 +1071,9 @@ def show_auth_page():
 
         with tab2:
             with st.form("register_form"):
-                email = st.text_input("Email", key="register_email", placeholder="you@example.com")
-                password = st.text_input("Password", type="password", key="register_password", placeholder="Min 8 characters")
-                password_confirm = st.text_input("Confirm Password", type="password", key="register_password_confirm", placeholder="••••••••")
+                email = st.text_input("Email", key="register_email", placeholder="you@example.com", max_chars=254)
+                password = st.text_input("Password", type="password", key="register_password", placeholder="Min 8 characters", max_chars=128)
+                password_confirm = st.text_input("Confirm Password", type="password", key="register_password_confirm", placeholder="••••••••", max_chars=128)
                 st.write("")  # spacing
                 
                 # Consent notice
@@ -1082,7 +1082,21 @@ def show_auth_page():
                 submitted = st.form_submit_button("Create Account", use_container_width=True, type="primary")
 
                 if submitted:
-                    if not email:
+                    # Get session ID for rate limiting (use Streamlit's session ID from context)
+                    # Since we can't easily get real IP in Streamlit Cloud, use script_run_id as fallback
+                    try:
+                        from streamlit.runtime.scriptrunner import get_script_run_ctx
+                        ctx = get_script_run_ctx()
+                        session_id = ctx.session_id if ctx else "unknown"
+                    except:
+                        # Fallback if context unavailable
+                        session_id = str(hash(str(st.session_state)))
+                    
+                    # Check signup rate limit
+                    allowed, rate_limit_msg = check_signup_rate_limit(session_id)
+                    if not allowed:
+                        st.error(rate_limit_msg)
+                    elif not email:
                         st.error("Please enter an email address")
                     elif not validate_email(email):
                         st.error("Please enter a valid email address")
@@ -1094,6 +1108,9 @@ def show_auth_page():
                         st.error("Passwords do not match")
                     else:
                         try:
+                            # Record signup attempt before attempting registration
+                            record_signup_attempt(session_id)
+                            
                             user = auth.register(email, password)
                             # Create persistent session
                             token = auth.create_session(user.id)
@@ -1184,9 +1201,9 @@ def show_user_menu():
 
         with st.expander("Change Password"):
             with st.form("change_password_form"):
-                old_pw = st.text_input("Current Password", type="password")
-                new_pw = st.text_input("New Password", type="password")
-                new_pw_confirm = st.text_input("Confirm New Password", type="password")
+                old_pw = st.text_input("Current Password", type="password", max_chars=128)
+                new_pw = st.text_input("New Password", type="password", max_chars=128)
+                new_pw_confirm = st.text_input("Confirm New Password", type="password", max_chars=128)
                 submitted = st.form_submit_button("Update Password")
 
                 if submitted:
@@ -1209,7 +1226,7 @@ def show_user_menu():
             
             with st.form("delete_account_form"):
                 st.markdown("**To confirm deletion, type:** `DELETE`")
-                confirmation_text = st.text_input("Confirmation", placeholder="Type DELETE to confirm")
+                confirmation_text = st.text_input("Confirmation", placeholder="Type DELETE to confirm", max_chars=50)
                 delete_button = st.form_submit_button(
                     "Delete My Account",
                     type="primary",
@@ -1495,7 +1512,8 @@ def render_sidebar():
                     "Message",
                     placeholder="Tell us what you think...",
                     key="feedback_message_input",
-                    height=100
+                    height=100,
+                    max_chars=10000
                 )
                 
                 submitted = st.form_submit_button("Submit Feedback", use_container_width=True)
@@ -1504,25 +1522,34 @@ def render_sidebar():
                     if not feedback_message or len(feedback_message.strip()) == 0:
                         st.error("Please enter a message")
                     else:
-                        # Get user agent (browser info) if available
-                        user_agent = None
-                        try:
-                            from streamlit.runtime.scriptrunner import get_script_run_ctx
-                            ctx = get_script_run_ctx()
-                            if ctx and hasattr(ctx, 'user_info'):
-                                user_agent = str(ctx.user_info)
-                        except:
-                            pass  # User agent is optional
+                        # Check feedback rate limit
+                        user_id = st.session_state.get("user_id", "anonymous")
+                        allowed, rate_limit_msg = check_feedback_rate_limit(user_id)
                         
-                        # Submit feedback
-                        if submit_feedback(
-                            feedback_type=feedback_type,
-                            message=feedback_message.strip(),
-                            page=current_page,
-                            user_agent=user_agent
-                        ):
-                            st.success("✓ Thank you for your feedback!")
-                            st.balloons()
+                        if not allowed:
+                            st.error(rate_limit_msg)
+                        else:
+                            # Get user agent (browser info) if available
+                            user_agent = None
+                            try:
+                                from streamlit.runtime.scriptrunner import get_script_run_ctx
+                                ctx = get_script_run_ctx()
+                                if ctx and hasattr(ctx, 'user_info'):
+                                    user_agent = str(ctx.user_info)
+                            except:
+                                pass  # User agent is optional
+                            
+                            # Submit feedback
+                            if submit_feedback(
+                                feedback_type=feedback_type,
+                                message=feedback_message.strip(),
+                                page=current_page,
+                                user_agent=user_agent
+                            ):
+                                # Record successful feedback submission
+                                record_feedback_submission(user_id)
+                                st.success("✓ Thank you for your feedback!")
+                                st.balloons()
             
             st.caption("For technical issues:")
             st.markdown("[Report on GitHub →](https://github.com/hendrixAIDev/churn_copilot_hendrix/issues)")
@@ -1727,7 +1754,9 @@ def render_add_card_section():
                         # Rerun to refresh all tabs (Dashboard will now show the new card)
                         st.rerun()
                     except StorageError as e:
-                        st.error(f"Failed: {e}")
+                        st.error("Couldn't save your card. Please try again.")
+                    except Exception as e:
+                        st.error("Something went wrong. Please try again in a moment.")
 
     st.divider()
 
@@ -2159,7 +2188,9 @@ def render_extraction_result():
                 # Rerun to refresh all tabs (Dashboard will now show the new card)
                 st.rerun()
             except StorageError as e:
-                st.error(f"Failed: {e}")
+                st.error("Couldn't save your card. Please try again.")
+            except Exception as e:
+                st.error("Something went wrong. Please try again in a moment.")
 
     if st.button("Discard", key="discard_extracted"):
         st.session_state.last_extraction = None
@@ -2415,8 +2446,13 @@ def render_card_edit_form(card, editing_key: str):
                         updates["sub_achieved"] = new_sub_achieved
 
                 if updates:
-                    st.session_state.storage.update_card(card.id, updates)
-                    st.success("✓ Changes saved!")
+                    try:
+                        st.session_state.storage.update_card(card.id, updates)
+                        st.success("✓ Changes saved!")
+                    except StorageError as e:
+                        st.error("Couldn't save your changes. Please try again.")
+                    except Exception as e:
+                        st.error("Something went wrong. Please try again in a moment.")
                 else:
                     st.info("No changes to save")
 
@@ -3649,14 +3685,23 @@ def main():
     # Auth check - show login if not authenticated
     if "user_id" not in st.session_state:
         show_auth_page()
+        # Show cookie consent banner on auth page too
+        render_cookie_consent_banner()
         return
 
     # User is authenticated - show user menu
     show_user_menu()
+    
+    # Show cookie consent banner if not yet accepted
+    render_cookie_consent_banner()
 
     # Initialize storage with user's ID
-    storage = DatabaseStorage(UUID(st.session_state.user_id))
-    st.session_state.storage = storage
+    try:
+        storage = DatabaseStorage(UUID(st.session_state.user_id))
+        st.session_state.storage = storage
+    except Exception as e:
+        st.error("Something went wrong. Please try again in a moment.")
+        return
 
     init_session_state()
 
