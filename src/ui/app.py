@@ -457,6 +457,227 @@ CUSTOM_CSS = """
         align-items: center;
         gap: 12px;
     }
+
+    /* ===== DARK MODE ===== */
+    @media (prefers-color-scheme: dark) {
+        /* Root variables - dark theme overrides */
+        :root {
+            --cp-text: #e2e8f0;
+            --cp-text-secondary: #94a3b8;
+            --cp-text-muted: #64748b;
+            --cp-surface: #1e293b;
+            --cp-surface-raised: #2d3748;
+            --cp-border: #334155;
+            --cp-border-light: #2d3748;
+            --cp-primary-bg: rgba(99, 102, 241, 0.15);
+            --cp-success-bg: rgba(16, 185, 129, 0.15);
+            --cp-warning-bg: rgba(245, 158, 11, 0.15);
+            --cp-danger-bg: rgba(239, 68, 68, 0.15);
+            --cp-info-bg: rgba(59, 130, 246, 0.15);
+        }
+
+        /* Body and main app background */
+        .stApp {
+            background: #0f172a;
+            color: var(--cp-text);
+        }
+
+        /* Main content area */
+        section[data-testid="stMain"] {
+            background: #0f172a;
+        }
+
+        /* Typography - ensure readability */
+        h1, h2, h3, h4, h5, h6 {
+            color: var(--cp-text) !important;
+        }
+
+        p, span, div {
+            color: var(--cp-text);
+        }
+
+        /* Card containers */
+        .card-container {
+            background: var(--cp-surface);
+            border-color: var(--cp-border);
+            color: var(--cp-text);
+        }
+
+        /* Auth container */
+        .auth-container {
+            background: var(--cp-surface);
+            border-color: var(--cp-border);
+        }
+
+        /* Summary cards */
+        .summary-card {
+            background: var(--cp-surface);
+            border-color: var(--cp-border);
+        }
+
+        .summary-value {
+            color: var(--cp-text);
+        }
+
+        /* Metrics */
+        [data-testid="stMetric"] {
+            background: var(--cp-surface);
+            border-color: var(--cp-border);
+        }
+
+        /* Forms */
+        [data-testid="stForm"] {
+            background: var(--cp-surface);
+            border-color: var(--cp-border);
+        }
+
+        /* Input fields */
+        .stTextInput > div > div > input,
+        .stTextArea > div > div > textarea,
+        .stNumberInput > div > div > input,
+        .stSelectbox > div > div,
+        .stDateInput > div > div > input {
+            background: var(--cp-surface-raised) !important;
+            color: var(--cp-text) !important;
+            border-color: var(--cp-border) !important;
+        }
+
+        /* Input labels */
+        .stTextInput > label,
+        .stTextArea > label,
+        .stNumberInput > label,
+        .stSelectbox > label,
+        .stDateInput > label {
+            color: var(--cp-text-secondary) !important;
+        }
+
+        /* Buttons - keep primary buttons vibrant, adjust secondary */
+        .stButton > button:not([kind="primary"]):not([data-testid="stBaseButton-primary"]) {
+            background: var(--cp-surface) !important;
+            color: var(--cp-text) !important;
+            border-color: var(--cp-border) !important;
+        }
+
+        .stButton > button:not([kind="primary"]):not([data-testid="stBaseButton-primary"]):hover {
+            background: var(--cp-surface-raised) !important;
+        }
+
+        /* Tabs - dark theme */
+        .stTabs [data-baseweb="tab-list"] {
+            background: var(--cp-surface);
+            border-color: var(--cp-border);
+        }
+
+        .stTabs [data-baseweb="tab"] {
+            color: var(--cp-text-secondary);
+        }
+
+        .stTabs [data-baseweb="tab"]:hover {
+            background: var(--cp-primary-bg);
+            color: var(--cp-primary-light);
+        }
+
+        /* Expanders */
+        [data-testid="stExpander"] {
+            background: var(--cp-surface);
+            border-color: var(--cp-border) !important;
+        }
+
+        [data-testid="stExpander"] summary {
+            color: var(--cp-text);
+        }
+
+        /* Benefit items */
+        .benefit-item {
+            background: var(--cp-surface-raised);
+            border-left-color: var(--cp-border);
+            color: var(--cp-text);
+        }
+
+        .benefit-item:hover {
+            background: var(--cp-surface);
+        }
+
+        /* Status badges - adjust for dark mode */
+        .badge-warning {
+            background: var(--cp-warning-bg);
+            color: #fbbf24;
+        }
+
+        .badge-success {
+            background: var(--cp-success-bg);
+            color: #34d399;
+        }
+
+        .badge-danger {
+            background: var(--cp-danger-bg);
+            color: #f87171;
+        }
+
+        .badge-info {
+            background: var(--cp-primary-bg);
+            color: #a5b4fc;
+        }
+
+        .badge-muted {
+            background: var(--cp-surface-raised);
+            color: var(--cp-text-secondary);
+        }
+
+        /* Alerts (st.info, st.warning, etc) */
+        [data-testid="stAlert"] {
+            background: var(--cp-surface) !important;
+            border-color: var(--cp-border) !important;
+        }
+
+        /* Download button */
+        .stDownloadButton > button {
+            background: var(--cp-surface) !important;
+            color: var(--cp-text) !important;
+            border-color: var(--cp-border) !important;
+        }
+
+        /* Auth page gradient - adjust for dark mode */
+        .auth-logo h1 {
+            background: linear-gradient(135deg, var(--cp-primary-light) 0%, #a78bfa 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .auth-tagline {
+            color: var(--cp-text-secondary);
+        }
+
+        /* Scrollbar - darker */
+        ::-webkit-scrollbar-thumb {
+            background: #475569;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #64748b;
+        }
+
+        /* Demo banner - dark mode version */
+        .demo-banner {
+            background: var(--cp-primary-bg);
+            border-color: rgba(99, 102, 241, 0.3);
+        }
+
+        /* Dividers */
+        hr {
+            border-color: var(--cp-border) !important;
+        }
+
+        /* Benefits progress bar */
+        .benefits-progress {
+            background: var(--cp-surface-raised);
+        }
+
+        /* Ensure sidebar stays as designed (already has dark gradient) */
+        [data-testid="stSidebar"] {
+            /* Keep existing dark gradient - don't override */
+        }
+    }
 </style>
 """
 
@@ -1179,8 +1400,12 @@ def render_add_card_section():
                 if st.button("Add Card", type="primary", key="add_from_library", use_container_width=True):
                     # Validate inputs before saving
                     validation_results = []
-                    validation_results.append(validate_opened_date(lib_opened_date))
+                    validation_results.append(validate_opened_date(lib_opened_date, required=True))
                     validation_results.append(validate_annual_fee(template.annual_fee))
+                    # Check for duplicate card names
+                    existing_names = [c.name for c in st.session_state.storage.get_cards()]
+                    card_display_name = lib_nickname if lib_nickname else template.name
+                    validation_results.append(validate_card_name(card_display_name, existing_names))
                     validation_results.append(validate_signup_bonus(
                         lib_sub_bonus,
                         lib_sub_spend,
@@ -1188,11 +1413,12 @@ def render_add_card_section():
                         lib_opened_date
                     ))
 
-                    # Show errors (blocking)
+                    # Show errors (blocking) — use return instead of st.stop()
+                    # to avoid halting all page rendering (which breaks tab navigation)
                     if has_errors(validation_results):
                         for error_msg in get_error_messages(validation_results):
                             st.error(error_msg)
-                        st.stop()
+                        return
 
                     # Show warnings (non-blocking)
                     if has_warnings(validation_results):
@@ -1633,11 +1859,12 @@ def render_extraction_result():
                     ext_opened_date
                 ))
 
-            # Show errors (blocking)
+            # Show errors (blocking) — use return instead of st.stop()
+            # to avoid halting all page rendering (which breaks tab navigation)
             if has_errors(validation_results):
                 for error_msg in get_error_messages(validation_results):
                     st.error(error_msg)
-                st.stop()
+                return
 
             # Show warnings (non-blocking)
             if has_warnings(validation_results):
@@ -1865,13 +2092,15 @@ def render_card_edit_form(card, editing_key: str):
                 # Validate inputs before saving
                 validation_results = []
                 validation_results.append(validate_opened_date(new_opened_date))
-                validation_results.append(validate_opened_date(new_af_date))  # Annual fee date should also not be in past inappropriately
+                # Note: Annual fee due date is intentionally NOT validated with validate_opened_date
+                # because AF dates should be in the future (that's when the next fee is due)
 
-                # Show errors (blocking)
+                # Show errors (blocking) — use return instead of st.stop()
+                # to avoid halting all page rendering (which breaks tab navigation)
                 if has_errors(validation_results):
                     for error_msg in get_error_messages(validation_results):
                         st.error(error_msg)
-                    st.stop()
+                    return
 
                 # Show warnings (non-blocking)
                 if has_warnings(validation_results):
