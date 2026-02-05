@@ -1,0 +1,82 @@
+"""Database connection pooling for ChurnPilot.
+
+Uses psycopg2's ThreadedConnectionPool with Streamlit's @st.cache_resource
+to maintain a persistent connection pool across Streamlit reruns.
+"""
+
+import streamlit as st
+from psycopg2.pool import ThreadedConnectionPool, PoolError
+from typing import Optional
+import logging
+
+logger = logging.getLogger(__name__)
+
+
+@st.cache_resource
+def get_connection_pool(database_url: str, minconn: int = 1, maxconn: int = 5) -> ThreadedConnectionPool:
+    """Get or create a connection pool.
+    
+    This function is cached by Streamlit to persist the pool across reruns.
+    The pool is thread-safe and suitable for Streamlit Cloud's single-worker setup.
+    
+    Args:
+        database_url: PostgreSQL connection URL.
+        minconn: Minimum number of connections to maintain (default: 1).
+        maxconn: Maximum number of connections allowed (default: 5).
+    
+    Returns:
+        ThreadedConnectionPool instance.
+    """
+    logger.info(f"Creating connection pool (minconn={minconn}, maxconn={maxconn})")
+    return ThreadedConnectionPool(
+        minconn=minconn,
+        maxconn=maxconn,
+        dsn=database_url
+    )
+
+
+def get_pool_stats(pool: ThreadedConnectionPool) -> dict:
+    """Get statistics about the connection pool.
+    
+    Args:
+        pool: The connection pool.
+    
+    Returns:
+        Dictionary with pool statistics.
+    """
+    try:
+        # Note: psycopg2 ThreadedConnectionPool doesn't expose these directly,
+        # but we can introspect the internal _used and _pool sets
+        used = len(pool._used) if hasattr(pool, '_used') else 0
+        available = len(pool._pool) if hasattr(pool, '_pool') else 0
+        
+        return {
+            "connections_in_use": used,
+            "connections_available": available,
+            "total_connections": used + available,
+            "minconn": pool.minconn,
+            "maxconn": pool.maxconn,
+        }
+    except Exception as e:
+        logger.warning(f"Failed to get pool stats: {e}")
+        return {
+            "error": str(e),
+            "minconn": pool.minconn if hasattr(pool, 'minconn') else None,
+            "maxconn": pool.maxconn if hasattr(pool, 'maxconn') else None,
+        }
+
+
+def close_pool(pool: Optional[ThreadedConnectionPool]) -> None:
+    """Close all connections in the pool.
+    
+    This should only be called when shutting down the application.
+    
+    Args:
+        pool: The connection pool to close.
+    """
+    if pool is not None:
+        try:
+            pool.closeall()
+            logger.info("Connection pool closed")
+        except Exception as e:
+            logger.error(f"Error closing connection pool: {e}")
