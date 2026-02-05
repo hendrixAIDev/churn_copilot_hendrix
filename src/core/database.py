@@ -192,8 +192,17 @@ def get_connection() -> Generator[psycopg2.extensions.connection, None, None]:
         
     Raises:
         PoolError: If unable to get connection from pool after retries.
+        RuntimeError: If connection pool could not be created.
     """
     pool = get_connection_pool(get_database_url())
+    
+    # If pool creation failed, raise a clear error
+    if pool is None:
+        raise RuntimeError(
+            "Failed to create database connection pool. "
+            "Check that DATABASE_URL is properly configured in Streamlit secrets."
+        )
+    
     conn = None
     max_retries = 3
     retry_count = 0

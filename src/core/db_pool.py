@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 
 @st.cache_resource
-def get_connection_pool(database_url: str, minconn: int = 1, maxconn: int = 5) -> ThreadedConnectionPool:
+def get_connection_pool(database_url: str, minconn: int = 1, maxconn: int = 5) -> Optional[ThreadedConnectionPool]:
     """Get or create a connection pool.
     
     This function is cached by Streamlit to persist the pool across reruns.
@@ -25,14 +25,18 @@ def get_connection_pool(database_url: str, minconn: int = 1, maxconn: int = 5) -
         maxconn: Maximum number of connections allowed (default: 5).
     
     Returns:
-        ThreadedConnectionPool instance.
+        ThreadedConnectionPool instance, or None if creation fails.
     """
-    logger.info(f"Creating connection pool (minconn={minconn}, maxconn={maxconn})")
-    return ThreadedConnectionPool(
-        minconn=minconn,
-        maxconn=maxconn,
-        dsn=database_url
-    )
+    try:
+        logger.info(f"Creating connection pool (minconn={minconn}, maxconn={maxconn})")
+        return ThreadedConnectionPool(
+            minconn=minconn,
+            maxconn=maxconn,
+            dsn=database_url
+        )
+    except Exception as e:
+        logger.error(f"Failed to create connection pool: {e}")
+        return None
 
 
 def get_pool_stats(pool: ThreadedConnectionPool) -> dict:
