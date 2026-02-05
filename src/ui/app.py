@@ -680,6 +680,64 @@ CUSTOM_CSS = """
             /* Keep existing dark gradient - don't override */
         }
     }
+    
+    /* ===== COOKIE CONSENT BANNER ===== */
+    .cookie-consent-banner {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        background: rgba(26, 26, 46, 0.98);
+        backdrop-filter: blur(10px);
+        border-top: 1px solid rgba(99, 102, 241, 0.3);
+        padding: 16px 20px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        z-index: 9999;
+        box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.15);
+        animation: slideUp 0.3s ease-out;
+    }
+    
+    @keyframes slideUp {
+        from {
+            transform: translateY(100%);
+            opacity: 0;
+        }
+        to {
+            transform: translateY(0);
+            opacity: 1;
+        }
+    }
+    
+    .cookie-consent-text {
+        color: #e0e7ff;
+        font-size: 0.9rem;
+        line-height: 1.5;
+        flex: 1;
+    }
+    
+    .cookie-consent-text a {
+        color: #818cf8;
+        text-decoration: underline;
+    }
+    
+    .cookie-consent-text a:hover {
+        color: #a5b4fc;
+    }
+    
+    @media (max-width: 768px) {
+        .cookie-consent-banner {
+            flex-direction: column;
+            align-items: stretch;
+            padding: 16px;
+        }
+        
+        .cookie-consent-text {
+            font-size: 0.85rem;
+        }
+    }
 </style>
 """
 
@@ -720,6 +778,15 @@ from src.core import (
 from src.core.preferences import PreferencesStorage, UserPreferences
 from src.core.exceptions import ExtractionError, StorageError, FetchError
 from src.core.auth import AuthService, validate_email, validate_password, MIN_PASSWORD_LENGTH, SESSION_TOKEN_BYTES
+from src.core.rate_limit import (
+    check_login_rate_limit,
+    record_login_failure,
+    reset_login_attempts,
+    check_signup_rate_limit,
+    record_signup_attempt,
+    check_feedback_rate_limit,
+    record_feedback_submission,
+)
 from extra_streamlit_components import CookieManager
 
 # Cookie key for session token (survives browser close, unlike query params)
@@ -892,6 +959,44 @@ def check_stored_session() -> bool:
         return False
 
 
+COOKIE_CONSENT_KEY = "churnpilot_cookie_consent"
+
+
+def render_cookie_consent_banner():
+    """Render cookie consent banner if not yet accepted."""
+    # Check if user has already accepted
+    cookie_manager = get_cookie_manager()
+    consent = cookie_manager.get(COOKIE_CONSENT_KEY)
+    
+    if consent == "accepted":
+        return
+    
+    # Create container for banner
+    banner_container = st.container()
+    
+    with banner_container:
+        # Render banner HTML
+        st.markdown("""
+        <div class="cookie-consent-banner">
+            <div class="cookie-consent-text">
+                🍪 ChurnPilot uses cookies to keep you logged in. By continuing to use this app, you accept our use of cookies.
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        # Button to accept (using columns for positioning)
+        _, button_col = st.columns([4, 1])
+        with button_col:
+            if st.button("Got it", key="cookie_consent_accept", use_container_width=True):
+                # Set cookie for 1 year
+                cookie_manager.set(
+                    COOKIE_CONSENT_KEY,
+                    "accepted",
+                    expires_at=datetime.now() + timedelta(days=365)
+                )
+                st.rerun()
+
+
 def show_auth_page():
     """Show login/register page with branded design.
 
@@ -902,7 +1007,7 @@ def show_auth_page():
     try:
         init_database()
     except Exception as e:
-        st.error(f"Database connection failed: {e}")
+        st.error("Something went wrong. Please try again in a moment.")
         return False
 
     # Centered auth layout
@@ -926,8 +1031,8 @@ def show_auth_page():
 
         with tab1:
             with st.form("login_form"):
-                email = st.text_input("Email", key="login_email", placeholder="you@example.com")
-                password = st.text_input("Password", type="password", key="login_password", placeholder="••••••••")
+                email = st.text_input("Email", key="login_email", placeholder="you@example.com", max_chars=254)
+                password = st.text_input("Password", type="password", key="login_password", placeholder="••••••••", max_chars=128)
                 st.write("")  # spacing
                 submitted = st.form_submit_button("Sign In", use_container_width=True, type="primary")
 
@@ -935,25 +1040,34 @@ def show_auth_page():
                     if not email or not password:
                         st.error("Please enter email and password")
                     else:
-                        user = auth.login(email, password)
-                        if user:
-                            # Create persistent session
-                            token = auth.create_session(user.id)
-                            st.session_state.user_id = str(user.id)
-                            st.session_state.user_email = user.email
-                            st.session_state.session_token = token
-                            # Save token to query params for persistence
-                            st.query_params[SESSION_QUERY_PARAM] = token
-                            # Save token to cookie for fresh URL navigation
-                            try:
-                                cookie_manager = get_cookie_manager()
-                                cookie_manager.set(SESSION_COOKIE_KEY, token, expires_at=None)
-                            except Exception:
-                                pass  # Cookie setting is best-effort
-                            # Rerun to refresh with authenticated state
-                            st.rerun()
+                        # Check rate limit
+                        allowed, rate_limit_msg = check_login_rate_limit(email)
+                        if not allowed:
+                            st.error(rate_limit_msg)
                         else:
-                            st.error("Invalid email or password")
+                            user = auth.login(email, password)
+                            if user:
+                                # Reset rate limit on successful login
+                                reset_login_attempts(email)
+                                # Create persistent session
+                                token = auth.create_session(user.id)
+                                st.session_state.user_id = str(user.id)
+                                st.session_state.user_email = user.email
+                                st.session_state.session_token = token
+                                # Save token to query params for persistence
+                                st.query_params[SESSION_QUERY_PARAM] = token
+                                # Save token to cookie for fresh URL navigation
+                                try:
+                                    cookie_manager = get_cookie_manager()
+                                    cookie_manager.set(SESSION_COOKIE_KEY, token, expires_at=None)
+                                except Exception:
+                                    pass  # Cookie setting is best-effort
+                                # Rerun to refresh with authenticated state
+                                st.rerun()
+                            else:
+                                # Record failed attempt
+                                record_login_failure(email)
+                                st.error("Invalid email or password")
 
         with tab2:
             with st.form("register_form"):
@@ -961,6 +1075,10 @@ def show_auth_page():
                 password = st.text_input("Password", type="password", key="register_password", placeholder="Min 8 characters")
                 password_confirm = st.text_input("Confirm Password", type="password", key="register_password_confirm", placeholder="••••••••")
                 st.write("")  # spacing
+                
+                # Consent notice
+                st.caption("By creating an account, you agree to our [Privacy Policy](?page=privacy) and [Terms of Service](?page=terms).")
+                
                 submitted = st.form_submit_button("Create Account", use_container_width=True, type="primary")
 
                 if submitted:
@@ -1084,6 +1202,50 @@ def show_user_menu():
                             st.success("Password changed!")
                         else:
                             st.error("Current password is incorrect")
+        
+        # Delete Account section
+        with st.expander("⚠️ Delete Account"):
+            st.warning("This will permanently delete your account and all your data (cards, benefits, settings). **This cannot be undone.**")
+            
+            with st.form("delete_account_form"):
+                st.markdown("**To confirm deletion, type:** `DELETE`")
+                confirmation_text = st.text_input("Confirmation", placeholder="Type DELETE to confirm")
+                delete_button = st.form_submit_button(
+                    "Delete My Account",
+                    type="primary",
+                    use_container_width=True
+                )
+                
+                if delete_button:
+                    if confirmation_text != "DELETE":
+                        st.error("Please type DELETE (all caps) to confirm account deletion")
+                    else:
+                        try:
+                            auth = AuthService()
+                            if auth.delete_account(UUID(st.session_state.user_id)):
+                                # Clear session
+                                if "session_token" in st.session_state:
+                                    auth.delete_session(st.session_state.session_token)
+                                    del st.session_state.session_token
+                                # Clear query params
+                                st.query_params.clear()
+                                # Clear session cookie
+                                try:
+                                    cookie_manager = get_cookie_manager()
+                                    cookie_manager.delete(SESSION_COOKIE_KEY)
+                                except Exception:
+                                    pass
+                                # Clear all session state
+                                for key in list(st.session_state.keys()):
+                                    del st.session_state[key]
+                                # Show success and redirect
+                                st.success("✅ Account deleted successfully")
+                                st.info("Redirecting to login page...")
+                                st.rerun()
+                            else:
+                                st.error("Failed to delete account. Please try again.")
+                        except Exception as e:
+                            st.error("Something went wrong. Please try again in a moment.")
 
 
 def init_session_state():
@@ -1367,6 +1529,12 @@ def render_sidebar():
 
         st.divider()
         st.caption(f"Library: {len(get_all_templates())} templates")
+        
+        # Legal footer
+        st.divider()
+        st.caption("**Legal**")
+        st.markdown("[Privacy Policy](?page=privacy)")
+        st.markdown("[Terms of Service](?page=terms)")
 
 
 def render_add_card_section():
@@ -3405,6 +3573,59 @@ def render_five_twenty_four_tab():
             f"</div>",
             unsafe_allow_html=True
         )
+
+
+def show_legal_page(page_type):
+    """Display Privacy Policy or Terms of Service without requiring authentication.
+    
+    Args:
+        page_type: "privacy" or "terms"
+    """
+    # Read the markdown file
+    pages_dir = Path(__file__).parent.parent / "pages"
+    if page_type == "privacy":
+        file_path = pages_dir / "privacy_policy.md"
+        title = "Privacy Policy"
+    else:  # terms
+        file_path = pages_dir / "terms_of_service.md"
+        title = "Terms of Service"
+    
+    try:
+        with open(file_path, 'r') as f:
+            content = f.read()
+        
+        # Display with ChurnPilot branding
+        st.markdown("""
+        <div style="text-align: center; margin-bottom: 32px;">
+            <div style="font-size: 3rem; margin-bottom: 8px;">💳</div>
+            <h1 style="margin: 0;">ChurnPilot</h1>
+            <p style="color: #64748b; margin-top: 4px;">Credit Card Intelligence</p>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        # Display the content
+        st.markdown(content)
+        
+        # Navigation footer
+        st.divider()
+        col1, col2, col3 = st.columns([1, 1, 1])
+        with col1:
+            if st.button("← Back to App", use_container_width=True):
+                st.query_params.clear()
+                st.rerun()
+        with col2:
+            if page_type == "privacy":
+                if st.button("Terms of Service →", use_container_width=True):
+                    st.query_params["page"] = "terms"
+                    st.rerun()
+            else:
+                if st.button("Privacy Policy →", use_container_width=True):
+                    st.query_params["page"] = "privacy"
+                    st.rerun()
+        
+    except FileNotFoundError:
+        st.error(f"Legal document not found: {file_path}")
+        st.info("Please contact support at hendrix.ai.dev@gmail.com")
 
 
 def main():
