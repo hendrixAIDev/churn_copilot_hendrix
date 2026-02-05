@@ -1655,6 +1655,7 @@ def render_add_card_section():
                         "Nickname",
                         placeholder="e.g., P2's Card",
                         key="lib_nickname",
+                        max_chars=100
                     )
                 with col2:
                     lib_opened_date = st.date_input(
@@ -1671,6 +1672,7 @@ def render_add_card_section():
                             "Bonus Amount",
                             placeholder="e.g., 80,000 points",
                             key="lib_sub_bonus",
+                            max_chars=200
                         )
                         lib_sub_spend = st.number_input(
                             "Spend Requirement ($)",
@@ -1817,7 +1819,8 @@ def render_add_card_section():
             sheet_url = st.text_input(
                 "Google Sheets URL:",
                 placeholder="https://docs.google.com/spreadsheets/d/...",
-                key="import_sheet_url"
+                key="import_sheet_url",
+                max_chars=2000
             )
             if sheet_url and st.button("Fetch from Google Sheets", key="import_fetch_sheets"):
                 try:
@@ -1885,7 +1888,8 @@ def render_add_card_section():
                 "Paste your spreadsheet data:",
                 height=200,
                 placeholder="Paste your spreadsheet data here...\nInclude column headers in the first row.",
-                key="import_text_area"
+                key="import_text_area",
+                max_chars=50000
             )
 
         # Parse and preview
@@ -2061,7 +2065,8 @@ def render_add_card_section():
                     "URL",
                     placeholder="https://www.uscreditcardguide.com/...",
                     label_visibility="collapsed",
-                    key="extract_url_input"
+                    key="extract_url_input",
+                    max_chars=2000
                 )
             with url_col2:
                 extract_url_btn = st.button("Extract", type="secondary", use_container_width=True, key="extract_url_btn")
@@ -2083,6 +2088,7 @@ def render_add_card_section():
                 height=150,
                 placeholder="Paste card terms, benefits page content, or any text about the card...",
                 key="extract_text_input",
+                max_chars=50000
             )
 
             if st.button("Extract", key="extract_text_btn", type="secondary", disabled=len(raw_text) < 50):
@@ -2140,7 +2146,7 @@ def render_extraction_result():
     save_col1, save_col2, save_col3 = st.columns([2, 2, 1])
 
     with save_col1:
-        ext_nickname = st.text_input("Nickname", key="ext_nickname", placeholder="Optional")
+        ext_nickname = st.text_input("Nickname", key="ext_nickname", placeholder="Optional", max_chars=100)
 
     with save_col2:
         ext_opened_date = st.date_input("Opened Date", value=None, key="ext_opened_date")
@@ -2211,6 +2217,7 @@ def render_card_edit_form(card, editing_key: str):
                 value=card.nickname or "",
                 key=f"edit_nickname_{card.id}",
                 placeholder="e.g., P2's Card",
+                max_chars=100
             )
 
             new_opened_date = st.date_input(
@@ -2239,6 +2246,7 @@ def render_card_edit_form(card, editing_key: str):
             value=card.notes or "",
             key=f"edit_notes_{card.id}",
             height=100,
+            max_chars=5000
         )
 
         # SUB tracking fields (only show if card has SUB)
@@ -2254,7 +2262,8 @@ def render_card_edit_form(card, editing_key: str):
                 value=card.signup_bonus.points_or_cash,
                 key=f"edit_sub_reward_{card.id}",
                 placeholder="e.g., 80,000 MR points, $500 cash, 1 free night",
-                help="What you'll earn when you complete the spending requirement"
+                help="What you'll earn when you complete the spending requirement",
+                max_chars=200
             )
 
             sub_col1, sub_col2 = st.columns(2)
@@ -2298,6 +2307,7 @@ def render_card_edit_form(card, editing_key: str):
                     "Offer Details",
                     placeholder="e.g., 20,000 points after $2,000 spend in 3 months",
                     key=f"ret_offer_{card.id}",
+                    max_chars=1000
                 )
             with ret_col2:
                 ret_accepted = st.checkbox(
@@ -2309,6 +2319,7 @@ def render_card_edit_form(card, editing_key: str):
                     "Notes (optional)",
                     placeholder="e.g., Called before AF posted",
                     key=f"ret_notes_{card.id}",
+                    max_chars=1000
                 )
 
             if st.button("Add Offer", key=f"add_retention_{card.id}"):
@@ -2351,13 +2362,15 @@ def render_card_edit_form(card, editing_key: str):
                     "From Product",
                     value=card.name,
                     key=f"pc_from_{card.id}",
-                    help="Original card name (pre-filled with current card)"
+                    help="Original card name (pre-filled with current card)",
+                    max_chars=200
                 )
                 pc_to = st.text_input(
                     "To Product",
                     placeholder="e.g., Chase Freedom Unlimited",
                     key=f"pc_to_{card.id}",
-                    help="New card name after product change"
+                    help="New card name after product change",
+                    max_chars=200
                 )
             with pc_col2:
                 pc_reason = st.selectbox(
@@ -2369,6 +2382,7 @@ def render_card_edit_form(card, editing_key: str):
                     "Notes (optional)",
                     placeholder="e.g., Called retention line first",
                     key=f"pc_notes_{card.id}",
+                    max_chars=1000
                 )
 
             if st.button("Add Product Change", key=f"add_pc_{card.id}"):
@@ -3166,6 +3180,7 @@ def render_dashboard():
             placeholder="Search by name or nickname...",
             key="search_query",
             label_visibility="collapsed",
+            max_chars=200
         )
 
     # Apply filters
