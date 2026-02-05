@@ -70,8 +70,14 @@ def check_extraction_limit(user_id: UUID) -> Tuple[bool, int, str]:
     if remaining > 0:
         return True, remaining, f"{remaining}/{FREE_TIER_MONTHLY_LIMIT} AI extractions remaining this month"
     else:
+        # Show when limit resets
+        from datetime import datetime
+        now = datetime.now()
+        next_month = (now.month % 12) + 1
+        next_year = now.year if next_month > now.month else now.year + 1
         return False, 0, (
-            "You've used all your AI extractions this month. "
+            f"You've used all {FREE_TIER_MONTHLY_LIMIT} AI extractions this month. "
+            f"Resets on {next_month}/1/{next_year}. "
             "You can still add cards from our library or enter details manually."
         )
 

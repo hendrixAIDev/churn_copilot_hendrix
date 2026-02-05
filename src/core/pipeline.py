@@ -192,9 +192,12 @@ def _extract_with_claude(content: str, max_content_chars: int = 15000) -> CardDa
         return _parse_to_card_data(data)
 
     except json.JSONDecodeError as e:
-        raise ExtractionError(f"Failed to parse Claude response as JSON: {e}\nResponse: {response_text[:500]}")
+        raise ExtractionError("Unable to understand the card information. The page might not contain clear card details. Try a different source or use manual entry.")
     except Exception as e:
-        raise ExtractionError(f"Extraction failed: {e}")
+        # Log technical details but show user-friendly message
+        import logging
+        logging.error(f"Extraction failed: {e}")
+        raise ExtractionError("Unable to extract card information. Please try again or enter details manually.")
 
 
 def _extract_json_from_response(response_text: str) -> str:

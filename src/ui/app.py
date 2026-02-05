@@ -1945,14 +1945,24 @@ def render_add_card_section():
         Perfect for quickly adding cards that aren't in our library yet.
         """)
 
-        # Show AI extraction usage status
+        # Show AI extraction usage status - prominent and clear
         user_id = UUID(st.session_state.user_id)
         can_extract, remaining, rate_limit_message = check_extraction_limit(user_id)
         
-        if can_extract:
-            st.info(f"🤖 **{remaining}/{FREE_TIER_MONTHLY_LIMIT} AI extractions remaining this month**")
+        # Calculate usage percentage for visual indicator
+        usage_pct = ((FREE_TIER_MONTHLY_LIMIT - remaining) / FREE_TIER_MONTHLY_LIMIT) * 100
+        
+        # Color-coded status based on remaining extractions
+        if remaining == 0:
+            st.error(f"🚫 **{rate_limit_message}**")
+            st.caption("Resets on the 1st of next month. You can still add cards from our library or enter details manually.")
+        elif remaining <= 2:
+            st.warning(f"⚠️ **{remaining}/{FREE_TIER_MONTHLY_LIMIT} AI extractions remaining** — Use them wisely!")
         else:
-            st.warning(f"⚠️ {rate_limit_message}")
+            st.success(f"🤖 **{remaining}/{FREE_TIER_MONTHLY_LIMIT} AI extractions available this month**")
+        
+        # Visual progress bar
+        st.progress(usage_pct / 100, text=f"Used {FREE_TIER_MONTHLY_LIMIT - remaining} of {FREE_TIER_MONTHLY_LIMIT} extractions")
 
         st.divider()
 
@@ -1973,20 +1983,52 @@ def render_add_card_section():
                 extract_url_btn = st.button("Extract", type="secondary", use_container_width=True, key="extract_url_btn")
 
             if extract_url_btn and url_input:
-                with st.spinner("Extracting card details from URL..."):
-                    try:
-                        user_id = UUID(st.session_state.user_id)
-                        card_data = extract_from_url(url_input, user_id=user_id)
-                        st.session_state.last_extraction = card_data
-                        st.session_state.source_url = url_input
-                        st.success(f"✓ Extracted: {card_data.name}")
-                        st.rerun()  # Refresh to update remaining count
-                    except FetchError as e:
-                        st.error(f"❌ {e}")
-                        st.info("💡 Make sure the URL is accessible and from a supported site.")
-                    except ExtractionError as e:
-                        st.error(f"❌ {e}")
-                        st.info("💡 Try copying the page content and using 'From Text' instead.")
+                # Multi-step loading indicator
+                progress_container = st.empty()
+                status_container = st.empty()
+                
+                try:
+                    user_id = UUID(st.session_state.user_id)
+                    
+                    # Step 1: Fetching
+                    with progress_container:
+                        st.progress(0.33, text="🌐 Fetching page content...")
+                    with status_container:
+                        st.info("Reading the webpage...")
+                    
+                    # Fetch (we'll need to modify this to show progress)
+                    import time
+                    time.sleep(0.5)  # Brief delay to show step
+                    
+                    # Step 2: Analyzing
+                    with progress_container:
+                        st.progress(0.66, text="🤖 Analyzing card details with AI...")
+                    with status_container:
+                        st.info("Extracting card information...")
+                    
+                    card_data = extract_from_url(url_input, user_id=user_id)
+                    
+                    # Step 3: Complete
+                    with progress_container:
+                        st.progress(1.0, text="✓ Extraction complete!")
+                    with status_container:
+                        st.success(f"✓ Extracted: **{card_data.name}**")
+                    
+                    st.session_state.last_extraction = card_data
+                    st.session_state.source_url = url_input
+                    time.sleep(0.8)  # Brief pause to show success
+                    st.rerun()  # Refresh to update remaining count
+                    
+                except FetchError as e:
+                    progress_container.empty()
+                    status_container.empty()
+                    st.error(f"❌ {e}")
+                    st.info("💡 Make sure the URL is accessible and from a supported site.")
+                except ExtractionError as e:
+                    progress_container.empty()
+                    status_container.empty()
+                    st.error(f"❌ {e}")
+                    st.info("💡 Try copying the page content and using 'From Text' instead.")
 
         with tab2:
             st.caption("Paste any text containing card details (terms, benefits, etc.)")
@@ -1999,17 +2041,37 @@ def render_add_card_section():
             )
 
             if st.button("Extract", key="extract_text_btn", type="secondary", disabled=len(raw_text) < 50):
-                with st.spinner("Extracting card details from text..."):
-                    try:
-                        user_id = UUID(st.session_state.user_id)
-                        card_data = extract_from_text(raw_text, user_id=user_id)
-                        st.session_state.last_extraction = card_data
-                        st.session_state.source_url = None
-                        st.success(f"✓ Extracted: {card_data.name}")
-                        st.rerun()  # Refresh to update remaining count
-                    except ExtractionError as e:
-                        st.error(f"❌ {e}")
-                        st.info("💡 Try pasting more detailed information like card terms, annual fee, and benefits.")
+                # Loading indicator for text extraction
+                progress_container = st.empty()
+                status_container = st.empty()
+                
+                try:
+                    user_id = UUID(st.session_state.user_id)
+                    
+                    with progress_container:
+                        st.progress(0.5, text="🤖 Analyzing text with AI...")
+                    with status_container:
+                        st.info("Extracting card information from your text...")
+                    
+                    card_data = extract_from_text(raw_text, user_id=user_id)
+                    
+                    with progress_container:
+                        st.progress(1.0, text="✓ Extraction complete!")
+                    with status_container:
+                        st.success(f"✓ Extracted: **{card_data.name}**")
+                    
+                    st.session_state.last_extraction = card_data
+                    st.session_state.source_url = None
+                    
+                    import time
+                    time.sleep(0.8)  # Brief pause to show success
+                    st.rerun()  # Refresh to update remaining count
+                    
+                except ExtractionError as e:
+                    progress_container.empty()
+                    status_container.empty()
+                    st.error(f"❌ {e}")
+                    st.info("💡 Try pasting more detailed information like card terms, annual fee, and benefits.")
 
     # Show extraction result
     if st.session_state.last_extraction:
@@ -2018,67 +2080,203 @@ def render_add_card_section():
 
 
 def render_extraction_result():
-    """Render the extracted card data for review and saving."""
+    """Render the extracted card data for review and saving with improved UX."""
     card_data = st.session_state.last_extraction
 
-    st.subheader("Review Extracted Card")
-
-    col1, col2 = st.columns(2)
-
-    with col1:
-        st.markdown(f"**{card_data.name}**")
-        st.caption(f"Issuer: {card_data.issuer}")
-        st.caption(f"Annual Fee: ${card_data.annual_fee}")
-
-        if card_data.signup_bonus:
-            st.markdown("**Sign-up Bonus**")
-            st.write(f"- {card_data.signup_bonus.points_or_cash}")
-            st.write(f"- Spend ${card_data.signup_bonus.spend_requirement:,.0f} in {card_data.signup_bonus.time_period_days} days")
-
-    with col2:
-        if card_data.credits:
-            st.markdown(f"**{len(card_data.credits)} Credits/Perks**")
-            for credit in card_data.credits[:5]:
-                st.caption(f"- {credit.name}: ${credit.amount}/{credit.frequency}")
-            if len(card_data.credits) > 5:
-                st.caption(f"... and {len(card_data.credits) - 5} more")
-
-    # Show enrichment info if card was matched to library
+    # Header with clear call-to-action
+    st.markdown("### 🎯 Review & Edit Extracted Card")
+    st.caption("Review the extracted information below. Edit any fields before saving.")
+    
+    # Check if card was auto-enriched from library
     from src.core import match_to_library_with_confidence
     match_result = match_to_library_with_confidence(card_data.name, card_data.issuer)
+    
+    # Show enrichment badge if matched
     if match_result.template_id:
-        st.success(f"✨ Auto-enriched from '{match_result.template.name}' template ({int(match_result.confidence * 100)}% match)")
-        if len(card_data.credits) > 0:
-            st.caption(f"ℹ️ Benefits above were automatically added from our library. Review and save if correct.")
-
-    # Save form
-    st.markdown("---")
-    save_col1, save_col2, save_col3 = st.columns([2, 2, 1])
-
-    with save_col1:
-        ext_nickname = st.text_input("Nickname", key="ext_nickname", placeholder="Optional", max_chars=100)
-
-    with save_col2:
-        ext_opened_date = st.date_input("Opened Date", value=None, key="ext_opened_date")
-
-    with save_col3:
-        st.write("")
-        st.write("")
-        if st.button("Save Card", type="primary", key="save_extracted"):
+        confidence_pct = int(match_result.confidence * 100)
+        st.info(f"✨ **Auto-enriched:** Matched to '{match_result.template.name}' ({confidence_pct}% confidence). Credits and benefits were added automatically.")
+    
+    # Preview card in a styled container
+    st.markdown("""
+    <style>
+    .extraction-preview {
+        background: var(--card-background, #1e1e1e);
+        border: 2px solid var(--primary-color, #0066cc);
+        border-radius: 12px;
+        padding: 20px;
+        margin: 16px 0;
+    }
+    .extraction-section {
+        margin: 12px 0;
+    }
+    .extraction-label {
+        color: var(--text-muted, #888);
+        font-size: 0.85em;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-bottom: 4px;
+    }
+    .extraction-value {
+        color: var(--text-primary, #fff);
+        font-size: 1.1em;
+        font-weight: 500;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+    
+    # Editable preview form
+    with st.container():
+        st.markdown('<div class="extraction-preview">', unsafe_allow_html=True)
+        
+        # Card name and issuer (editable)
+        col1, col2 = st.columns([3, 2])
+        with col1:
+            ext_name = st.text_input(
+                "Card Name",
+                value=card_data.name,
+                key="ext_name",
+                max_chars=255,
+                help="Edit if the extracted name is incorrect"
+            )
+        with col2:
+            ext_issuer = st.selectbox(
+                "Issuer",
+                options=["American Express", "Chase", "Citi", "Capital One", "Discover", 
+                        "Bank of America", "Wells Fargo", "US Bank", "Barclays", "Other"],
+                index=["American Express", "Chase", "Citi", "Capital One", "Discover", 
+                      "Bank of America", "Wells Fargo", "US Bank", "Barclays", "Other"].index(
+                          card_data.issuer if card_data.issuer in ["American Express", "Chase", "Citi", 
+                          "Capital One", "Discover", "Bank of America", "Wells Fargo", "US Bank", 
+                          "Barclays", "Other"] else "Other"
+                      ),
+                key="ext_issuer"
+            )
+        
+        # Annual fee (editable)
+        col1, col2, col3 = st.columns([2, 2, 2])
+        with col1:
+            ext_annual_fee = st.number_input(
+                "Annual Fee ($)",
+                value=card_data.annual_fee if card_data.annual_fee >= 0 else 0,
+                min_value=0,
+                max_value=10000,
+                step=25,
+                key="ext_annual_fee",
+                help="Edit if the extracted fee is incorrect"
+            )
+        with col2:
+            ext_nickname = st.text_input(
+                "Nickname (optional)",
+                key="ext_nickname",
+                placeholder="e.g., My Travel Card",
+                max_chars=100
+            )
+        with col3:
+            ext_opened_date = st.date_input(
+                "Opened Date",
+                value=None,
+                key="ext_opened_date",
+                help="When did you open this card?"
+            )
+        
+        st.markdown("---")
+        
+        # Sign-up bonus section (if extracted)
+        if card_data.signup_bonus:
+            st.markdown("**📊 Sign-up Bonus**")
+            sub_col1, sub_col2, sub_col3 = st.columns(3)
+            with sub_col1:
+                ext_sub_points = st.text_input(
+                    "Bonus",
+                    value=card_data.signup_bonus.points_or_cash,
+                    key="ext_sub_points",
+                    help="e.g., '80,000 points' or '$500 cash back'"
+                )
+            with sub_col2:
+                ext_sub_spend = st.number_input(
+                    "Spend Required ($)",
+                    value=float(card_data.signup_bonus.spend_requirement),
+                    min_value=0.0,
+                    step=500.0,
+                    key="ext_sub_spend"
+                )
+            with sub_col3:
+                ext_sub_days = st.number_input(
+                    "Days to Meet",
+                    value=card_data.signup_bonus.time_period_days,
+                    min_value=1,
+                    max_value=365,
+                    step=30,
+                    key="ext_sub_days"
+                )
+        else:
+            st.caption("ℹ️ No sign-up bonus detected. You can add one after saving.")
+        
+        # Credits/benefits preview (read-only, can be edited after saving)
+        if card_data.credits:
+            st.markdown("---")
+            st.markdown(f"**💳 Credits & Benefits ({len(card_data.credits)})**")
+            
+            # Show in a nice grid
+            credit_cols = st.columns(2)
+            for idx, credit in enumerate(card_data.credits):
+                with credit_cols[idx % 2]:
+                    st.markdown(f"""
+                    <div style="background: var(--secondary-background, #2a2a2a); 
+                                padding: 10px; border-radius: 8px; margin: 4px 0;">
+                        <div style="font-weight: 600;">{credit.name}</div>
+                        <div style="color: var(--success-color, #4ade80); font-size: 1.2em;">
+                            ${credit.amount} <span style="color: var(--text-muted, #888); font-size: 0.8em;">/ {credit.frequency}</span>
+                        </div>
+                    </div>
+                    """, unsafe_allow_html=True)
+            
+            st.caption("💡 You can edit credits after saving the card.")
+        else:
+            st.caption("ℹ️ No credits detected. You can add them manually after saving.")
+        
+        st.markdown('</div>', unsafe_allow_html=True)
+    
+    # Action buttons
+    st.markdown("")
+    btn_col1, btn_col2, btn_col3 = st.columns([2, 2, 1])
+    
+    with btn_col1:
+        if st.button("💾 Save Card", type="primary", key="save_extracted", use_container_width=True):
+            # Create updated card data with edits
+            from src.core.models import CardData, SignupBonus
+            
+            # Prepare signup bonus
+            signup_bonus = None
+            if card_data.signup_bonus:
+                signup_bonus = SignupBonus(
+                    points_or_cash=ext_sub_points,
+                    spend_requirement=ext_sub_spend,
+                    time_period_days=ext_sub_days
+                )
+            
+            # Create updated card data
+            updated_card_data = CardData(
+                name=ext_name,
+                issuer=ext_issuer,
+                annual_fee=ext_annual_fee,
+                signup_bonus=signup_bonus,
+                credits=card_data.credits  # Keep credits as-is
+            )
+            
             # Validate inputs before saving
             validation_results = []
             validation_results.append(validate_opened_date(ext_opened_date))
-            validation_results.append(validate_annual_fee(card_data.annual_fee))
-            if card_data.signup_bonus:
+            validation_results.append(validate_annual_fee(ext_annual_fee))
+            if signup_bonus:
                 validation_results.append(validate_signup_bonus(
-                    card_data.signup_bonus.points_or_cash,
-                    card_data.signup_bonus.spend_requirement,
-                    card_data.signup_bonus.time_period_days,
+                    ext_sub_points,
+                    ext_sub_spend,
+                    ext_sub_days,
                     ext_opened_date
                 ))
 
-            # Show errors (blocking) — use return instead of st.stop()
-            # to avoid halting all page rendering (which breaks tab navigation)
+            # Show errors (blocking)
             if has_errors(validation_results):
                 for error_msg in get_error_messages(validation_results):
                     st.error(error_msg)
@@ -2091,17 +2289,16 @@ def render_extraction_result():
 
             try:
                 card = st.session_state.storage.add_card(
-                    card_data,
+                    updated_card_data,
                     opened_date=ext_opened_date,
                     raw_text=getattr(st.session_state, "source_url", None),
                 )
                 # Update nickname if provided
                 if ext_nickname:
                     st.session_state.storage.update_card(card.id, {"nickname": ext_nickname})
+                
                 st.session_state.last_extraction = None
-                # Store success for confirmation at top of Add Card section after rerun
                 st.session_state.card_add_success = card.name
-                # Rerun to refresh all tabs (Dashboard will now show the new card)
                 st.rerun()
             except StorageError as e:
                 st.error("Unable to save your card. Please check your connection and try again.")
@@ -2111,10 +2308,14 @@ def render_extraction_result():
                 st.error("Unable to save your card. Please refresh the page and try again.")
                 import logging
                 logging.error(f"Extracted card save failed (unexpected): {e}")
-
-    if st.button("Discard", key="discard_extracted"):
-        st.session_state.last_extraction = None
-        st.rerun()
+    
+    with btn_col2:
+        if st.button("❌ Discard", key="discard_extracted", use_container_width=True):
+            st.session_state.last_extraction = None
+            st.rerun()
+    
+    with btn_col3:
+        st.caption("")  # Spacer
 
 
 def render_card_edit_form(card, editing_key: str):
