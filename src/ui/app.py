@@ -858,30 +858,19 @@ def render_cookie_consent_banner():
     if consent == "accepted":
         return
     
-    # Create container for banner
-    banner_container = st.container()
-    
-    with banner_container:
-        # Render banner HTML
-        st.markdown("""
-        <div class="cookie-consent-banner">
-            <div class="cookie-consent-text">
-                🍪 ChurnPilot uses cookies to keep you logged in. By continuing to use this app, you accept our use of cookies.
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-        
-        # Button to accept (using columns for positioning)
-        _, button_col = st.columns([4, 1])
-        with button_col:
-            if st.button("Got it", key="cookie_consent_accept", use_container_width=True):
-                # Set cookie for 1 year
-                cookie_manager.set(
-                    COOKIE_CONSENT_KEY,
-                    "accepted",
-                    expires_at=datetime.now() + timedelta(days=365)
-                )
-                st.rerun()
+    # Render inline banner with dismiss button
+    col_text, col_btn = st.columns([5, 1])
+    with col_text:
+        st.caption("🍪 This app uses cookies to keep you logged in. By continuing, you accept our use of cookies.")
+    with col_btn:
+        if st.button("✕", key="cookie_consent_accept", help="Dismiss cookie notice"):
+            # Set cookie for 1 year
+            cookie_manager.set(
+                COOKIE_CONSENT_KEY,
+                "accepted",
+                expires_at=datetime.now() + timedelta(days=365)
+            )
+            st.rerun()
 
 
 def show_auth_page():
@@ -1109,13 +1098,18 @@ def show_user_menu():
                         else:
                             st.error("Current password is incorrect")
         
-        # Delete Account section
-        with st.expander("⚠️ Delete Account"):
-            st.warning("This will permanently delete your account and all your data (cards, benefits, settings). **This cannot be undone.**")
+        # Settings section (contains advanced/destructive options)
+        with st.expander("⚙️ Settings"):
+            st.caption("Account management options")
+            
+            # Delete Account — nested inside Settings
+            st.divider()
+            st.markdown("**Danger Zone**")
+            st.warning("Deleting your account will permanently remove all your data (cards, benefits, settings). **This cannot be undone.**")
             
             with st.form("delete_account_form"):
-                st.markdown("**To confirm deletion, type:** `DELETE`")
-                confirmation_text = st.text_input("Confirmation", placeholder="Type DELETE to confirm", max_chars=50)
+                st.markdown("To confirm, type `DELETE`:")
+                confirmation_text = st.text_input("Confirmation", placeholder="Type DELETE to confirm", max_chars=50, label_visibility="collapsed")
                 delete_button = st.form_submit_button(
                     "Delete My Account",
                     type="primary",
