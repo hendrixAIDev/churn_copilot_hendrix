@@ -2539,6 +2539,7 @@ def render_card_item(card, show_issuer_header: bool = True, selection_mode: bool
 def go_to_add_card():
     """Navigate to the Add Card tab."""
     st.session_state.navigate_to_add_card = True
+    st.rerun()
 
 
 def render_empty_dashboard():
