@@ -3692,6 +3692,12 @@ def main():
     st.markdown(CUSTOM_CSS, unsafe_allow_html=True)
     st.markdown(COMPONENT_CSS, unsafe_allow_html=True)
 
+    # Check for legal page requests (public, no auth required)
+    legal_page = st.query_params.get("page")
+    if legal_page in ("privacy", "terms"):
+        show_legal_page(legal_page)
+        return
+
     # Try to restore session from browser storage (persists across page refresh)
     # This runs on every page load - if session token is found and valid,
     # it restores user_id and user_email to session state
