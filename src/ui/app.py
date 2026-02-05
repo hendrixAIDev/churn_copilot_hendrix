@@ -1400,12 +1400,8 @@ def render_add_card_section():
                 if st.button("Add Card", type="primary", key="add_from_library", use_container_width=True):
                     # Validate inputs before saving
                     validation_results = []
-                    validation_results.append(validate_opened_date(lib_opened_date, required=True))
+                    validation_results.append(validate_opened_date(lib_opened_date))
                     validation_results.append(validate_annual_fee(template.annual_fee))
-                    # Check for duplicate card names
-                    existing_names = [c.name for c in st.session_state.storage.get_cards()]
-                    card_display_name = lib_nickname if lib_nickname else template.name
-                    validation_results.append(validate_card_name(card_display_name, existing_names))
                     validation_results.append(validate_signup_bonus(
                         lib_sub_bonus,
                         lib_sub_spend,

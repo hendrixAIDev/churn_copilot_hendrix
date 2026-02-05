@@ -30,22 +30,17 @@ class ValidationError:
 ValidationResult = Literal["ok"] | ValidationWarning | ValidationError
 
 
-def validate_opened_date(opened_date: date | None, required: bool = False) -> ValidationResult:
+def validate_opened_date(opened_date: date | None) -> ValidationResult:
     """Validate card opened date.
 
     Args:
-        opened_date: The date the card was opened.
-        required: If True, missing date is a warning (not error, since user can set later).
+        opened_date: The date the card was opened. Optional — cards without
+            opened dates are valid but won't count toward 5/24 tracking.
 
     Returns:
         ValidationResult indicating if date is valid.
     """
     if opened_date is None:
-        if required:
-            return ValidationWarning(
-                "No opened date provided. Without it, 5/24 tracking and "
-                "SUB deadlines won't work correctly. You can add it later by editing the card."
-            )
         return "ok"
 
     today = date.today()
