@@ -83,6 +83,7 @@ def get_schema_sql() -> str:
         group_by_issuer BOOLEAN DEFAULT FALSE,
         auto_enrich_enabled BOOLEAN DEFAULT TRUE,
         enrichment_min_confidence FLOAT DEFAULT 0.7,
+        onboarding_completed BOOLEAN DEFAULT FALSE,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
 

@@ -723,6 +723,7 @@ from src.ui.components.progress import PROGRESS_CSS
 from src.ui.components.collapsible import COLLAPSIBLE_CSS
 from src.ui.components.hero import HERO_CSS
 from src.ui.components.celebration import CELEBRATION_CSS
+from src.ui.components.onboarding_wizard import WIZARD_CSS, render_onboarding_wizard, should_show_wizard, mark_wizard_completed
 
 # Import demo data
 from src.core.demo import get_demo_cards, get_demo_summary
@@ -736,6 +737,7 @@ COMPONENT_CSS = f"""
 {COLLAPSIBLE_CSS}
 {HERO_CSS}
 {CELEBRATION_CSS}
+{WIZARD_CSS}
 """
 
 # Input validation
@@ -892,7 +894,9 @@ def show_auth_page():
     try:
         init_database()
     except Exception as e:
-        st.error("Something went wrong. Please try again in a moment.")
+        st.error("Unable to connect to the database. Please check your connection and refresh the page.")
+        import logging
+        logging.error(f"Database initialization failed: {e}")
         return False
 
     # Centered auth layout
@@ -1145,9 +1149,11 @@ def show_user_menu():
                                 st.info("Redirecting to login page...")
                                 st.rerun()
                             else:
-                                st.error("Failed to delete account. Please try again.")
+                                st.error("Unable to delete your account. Please try again or contact support if the issue persists.")
                         except Exception as e:
-                            st.error("Something went wrong. Please try again in a moment.")
+                            st.error("Unable to complete account deletion. Please check your connection and try again.")
+                            import logging
+                            logging.error(f"Account deletion failed: {e}")
 
 
 def init_session_state():
@@ -1166,6 +1172,11 @@ def init_session_state():
         st.session_state.demo_mode = False
     if "show_welcome" not in st.session_state:
         st.session_state.show_welcome = True
+    # Onboarding wizard state
+    if "wizard_step" not in st.session_state:
+        st.session_state.wizard_step = 1
+    if "wizard_completed" not in st.session_state:
+        st.session_state.wizard_completed = False
 
 
 def submit_feedback(feedback_type: str, message: str, page: str = None, user_agent: str = None):
@@ -1197,7 +1208,9 @@ def submit_feedback(feedback_type: str, message: str, page: str = None, user_age
         return True
         
     except Exception as e:
-        st.error(f"Failed to submit feedback: {e}")
+        st.error("Unable to submit feedback. Please check your connection and try again.")
+        import logging
+        logging.error(f"Feedback submission failed: {e}")
         return False
 
 
@@ -1623,9 +1636,13 @@ def render_add_card_section():
                         # Rerun to refresh all tabs (Dashboard will now show the new card)
                         st.rerun()
                     except StorageError as e:
-                        st.error("Couldn't save your card. Please try again.")
+                        st.error("Unable to save your card. Please check your connection and try again.")
+                        import logging
+                        logging.error(f"Card save failed (StorageError): {e}")
                     except Exception as e:
-                        st.error("Something went wrong. Please try again in a moment.")
+                        st.error("Unable to save your card. Please refresh the page and try again.")
+                        import logging
+                        logging.error(f"Card save failed (unexpected): {e}")
 
     st.divider()
 
@@ -1711,9 +1728,11 @@ def render_add_card_section():
                         st.session_state.spreadsheet_data_loaded = True
                         show_toast_success("Spreadsheet data fetched!")
                     else:
-                        st.error("Invalid Google Sheets URL format")
+                        st.error("Invalid Google Sheets URL format. Please check the URL and try again.")
                 except Exception as e:
-                    st.error(f"Failed to fetch: {e}")
+                    st.error("Unable to fetch spreadsheet data. Check that the sheet is shared publicly and try again.")
+                    import logging
+                    logging.error(f"Google Sheets fetch failed: {e}")
 
         elif import_method == "Upload File":
             uploaded_file = st.file_uploader(
@@ -1740,14 +1759,18 @@ def render_add_card_section():
                                 st.error("📦 Missing dependency: openpyxl is required for Excel files.")
                                 st.info("Run: `pip install openpyxl`")
                             else:
-                                st.error(f"Failed to read Excel file: {ie}")
+                                st.error("Unable to read Excel file. Please ensure the file is not corrupted and try again.")
+                                import logging
+                                logging.error(f"Excel read failed: {ie}")
                             return
                     else:
                         spreadsheet_data = uploaded_file.getvalue().decode('utf-8')
                     st.session_state.spreadsheet_data_loaded = True
                     show_toast_success(f"Loaded {uploaded_file.name}")
                 except Exception as e:
-                    st.error(f"Failed to read file: {e}")
+                    st.error("Unable to read the uploaded file. Please ensure it's a valid CSV or Excel file and try again.")
+                    import logging
+                    logging.error(f"File upload failed: {e}")
 
         elif import_method == "Paste CSV/TSV Data":
             st.info("💡 Copy your spreadsheet data (select all cells, Ctrl+C) and paste here.")
@@ -1871,9 +1894,11 @@ def render_add_card_section():
                                             st.caption(f"{status_icon} ${benefit['amount']} {benefit['name']} ({benefit['frequency']})")
 
                 except Exception as e:
-                    st.error(f"Failed to parse: {e}")
+                    st.error("Unable to parse spreadsheet data. Please check the format matches the expected columns and try again.")
+                    import logging
+                    logging.error(f"Spreadsheet parse failed: {e}")
                     import traceback
-                    with st.expander("Error details"):
+                    with st.expander("📋 Technical details (for debugging)"):
                         st.code(traceback.format_exc())
 
         # Import button
@@ -1954,10 +1979,14 @@ def render_add_card_section():
                         card_data = extract_from_url(url_input, user_id=user_id)
                         st.session_state.last_extraction = card_data
                         st.session_state.source_url = url_input
-                        st.success(f"Extracted: {card_data.name}")
+                        st.success(f"✓ Extracted: {card_data.name}")
                         st.rerun()  # Refresh to update remaining count
-                    except (FetchError, ExtractionError) as e:
-                        st.error(f"Failed: {e}")
+                    except FetchError as e:
+                        st.error(f"❌ {e}")
+                        st.info("💡 Make sure the URL is accessible and from a supported site.")
+                    except ExtractionError as e:
+                        st.error(f"❌ {e}")
+                        st.info("💡 Try copying the page content and using 'From Text' instead.")
 
         with tab2:
             st.caption("Paste any text containing card details (terms, benefits, etc.)")
@@ -1976,10 +2005,11 @@ def render_add_card_section():
                         card_data = extract_from_text(raw_text, user_id=user_id)
                         st.session_state.last_extraction = card_data
                         st.session_state.source_url = None
-                        st.success(f"Extracted: {card_data.name}")
+                        st.success(f"✓ Extracted: {card_data.name}")
                         st.rerun()  # Refresh to update remaining count
                     except ExtractionError as e:
-                        st.error(f"Failed: {e}")
+                        st.error(f"❌ {e}")
+                        st.info("💡 Try pasting more detailed information like card terms, annual fee, and benefits.")
 
     # Show extraction result
     if st.session_state.last_extraction:
@@ -2074,9 +2104,13 @@ def render_extraction_result():
                 # Rerun to refresh all tabs (Dashboard will now show the new card)
                 st.rerun()
             except StorageError as e:
-                st.error("Couldn't save your card. Please try again.")
+                st.error("Unable to save your card. Please check your connection and try again.")
+                import logging
+                logging.error(f"Extracted card save failed (StorageError): {e}")
             except Exception as e:
-                st.error("Something went wrong. Please try again in a moment.")
+                st.error("Unable to save your card. Please refresh the page and try again.")
+                import logging
+                logging.error(f"Extracted card save failed (unexpected): {e}")
 
     if st.button("Discard", key="discard_extracted"):
         st.session_state.last_extraction = None
@@ -2344,9 +2378,13 @@ def render_card_edit_form(card, editing_key: str):
                         st.session_state.storage.update_card(card.id, updates)
                         st.success("✓ Changes saved!")
                     except StorageError as e:
-                        st.error("Couldn't save your changes. Please try again.")
+                        st.error("Unable to save your changes. Please check your connection and try again.")
+                        import logging
+                        logging.error(f"Card update failed (StorageError): {e}")
                     except Exception as e:
-                        st.error("Something went wrong. Please try again in a moment.")
+                        st.error("Unable to save your changes. Please refresh the page and try again.")
+                        import logging
+                        logging.error(f"Card update failed (unexpected): {e}")
                 else:
                     st.info("No changes to save")
 
@@ -3601,7 +3639,9 @@ def main():
         storage = DatabaseStorage(UUID(st.session_state.user_id))
         st.session_state.storage = storage
     except Exception as e:
-        st.error("Something went wrong. Please try again in a moment.")
+        st.error("Unable to load your data. Please check your connection and refresh the page.")
+        import logging
+        logging.error(f"Storage initialization failed: {e}")
         return
 
     init_session_state()
@@ -3636,27 +3676,40 @@ def main():
 
     render_sidebar()
 
-    # Show hero welcome for new users (only when not in demo mode and no cards)
-    if is_new_user and st.session_state.show_welcome and not st.session_state.demo_mode:
+    # Show onboarding wizard for new users (only when not in demo mode and no cards)
+    user_id = st.session_state.get("user_id")
+    if is_new_user and not st.session_state.demo_mode and should_show_wizard(user_id):
         # Get template count for stats
         template_count = len(get_all_templates())
 
-        hero_action = render_hero(
-            show_demo_button=True,
-            demo_callback=lambda: None,  # Handled below
-            add_card_callback=lambda: None,  # Handled below
+        wizard_action = render_onboarding_wizard(
+            current_step=st.session_state.wizard_step,
             template_count=template_count,
+            on_complete=lambda: mark_wizard_completed(user_id),
+            on_skip=lambda: mark_wizard_completed(user_id),
+            key_prefix="onboarding",
         )
 
-        if hero_action == "demo":
-            st.session_state.demo_mode = True
-            st.session_state.show_welcome = False
+        if wizard_action == "next":
+            st.session_state.wizard_step += 1
             st.rerun()
-        elif hero_action == "add":
-            st.session_state.show_welcome = False
+        elif wizard_action == "add_card":
+            # Complete wizard and navigate to add card
+            mark_wizard_completed(user_id)
+            st.session_state.navigate_to_add_card = True
+            st.rerun()
+        elif wizard_action == "complete":
+            # Wizard finished - reset step and mark completed
+            mark_wizard_completed(user_id)
+            st.session_state.wizard_step = 1
+            st.rerun()
+        elif wizard_action == "skip":
+            # User skipped - mark completed and show main app
+            mark_wizard_completed(user_id)
+            st.session_state.wizard_step = 1
             st.rerun()
 
-        # Don't show tabs yet for completely new users - just the hero
+        # Don't show tabs yet while wizard is active
         return
 
     # Check if user clicked "Add Your First Card" button - show Add Card section directly
