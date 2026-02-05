@@ -27,27 +27,43 @@ SESSION_QUERY_PARAM = "s"
 # Custom CSS for cleaner UI — ChurnPilot Design System v2
 CUSTOM_CSS = """
 <style>
-    /* ===== GLOBAL DESIGN TOKENS ===== */
+    /* ===== GLOBAL DESIGN TOKENS — LIGHT MODE ===== */
     :root {
         --cp-primary: #6366f1;
         --cp-primary-light: #818cf8;
         --cp-primary-dark: #4f46e5;
         --cp-primary-bg: #eef2ff;
         --cp-success: #10b981;
+        --cp-success-light: #34d399;
         --cp-success-bg: #ecfdf5;
+        --cp-success-text: #065f46;
         --cp-warning: #f59e0b;
+        --cp-warning-light: #fbbf24;
         --cp-warning-bg: #fffbeb;
+        --cp-warning-text: #92400e;
         --cp-danger: #ef4444;
+        --cp-danger-light: #f87171;
         --cp-danger-bg: #fef2f2;
+        --cp-danger-text: #991b1b;
         --cp-info: #3b82f6;
         --cp-info-bg: #eff6ff;
+        --cp-info-text: #3730a3;
         --cp-text: #1a1a2e;
         --cp-text-secondary: #64748b;
         --cp-text-muted: #94a3b8;
+        --cp-text-on-surface: #1a1a2e;
         --cp-surface: #ffffff;
-        --cp-surface-raised: #ffffff;
+        --cp-surface-raised: #f8fafc;
+        --cp-surface-overlay: #f1f5f9;
+        --cp-bg: #fafbfc;
         --cp-border: #e2e8f0;
         --cp-border-light: #f1f5f9;
+        --cp-fee-free: #059669;
+        --cp-reward-label: #4f46e5;
+        --cp-reward-value: #1e1b4b;
+        --cp-sub-earned-label: #065f46;
+        --cp-sub-earned-value: #064e3b;
+        --cp-annual-value: #3730a3;
         --cp-radius-sm: 8px;
         --cp-radius-md: 12px;
         --cp-radius-lg: 16px;
@@ -277,22 +293,22 @@ CUSTOM_CSS = """
     }
     .badge-warning {
         background: var(--cp-warning-bg);
-        color: #92400e;
+        color: var(--cp-warning-text);
         border: 1px solid rgba(245, 158, 11, 0.2);
     }
     .badge-success {
         background: var(--cp-success-bg);
-        color: #065f46;
+        color: var(--cp-sub-earned-label);
         border: 1px solid rgba(16, 185, 129, 0.2);
     }
     .badge-danger {
         background: var(--cp-danger-bg);
-        color: #991b1b;
+        color: var(--cp-danger-text);
         border: 1px solid rgba(239, 68, 68, 0.2);
     }
     .badge-info {
         background: var(--cp-primary-bg);
-        color: #3730a3;
+        color: var(--cp-annual-value);
         border: 1px solid rgba(99, 102, 241, 0.2);
     }
     .badge-muted {
@@ -371,12 +387,12 @@ CUSTOM_CSS = """
     .benefit-item.used {
         background: var(--cp-success-bg);
         border-left-color: var(--cp-success);
-        color: #065f46;
+        color: var(--cp-sub-earned-label);
     }
     .benefit-item.unused {
         background: var(--cp-warning-bg);
         border-left-color: var(--cp-warning);
-        color: #92400e;
+        color: var(--cp-warning-text);
     }
 
     /* ===== DOWNLOAD BUTTON ===== */
@@ -462,222 +478,296 @@ CUSTOM_CSS = """
 
     /* ===== DARK MODE ===== */
     @media (prefers-color-scheme: dark) {
-        /* Root variables - dark theme overrides */
         :root {
             --cp-text: #e2e8f0;
             --cp-text-secondary: #94a3b8;
             --cp-text-muted: #64748b;
+            --cp-text-on-surface: #e2e8f0;
             --cp-surface: #1e293b;
-            --cp-surface-raised: #2d3748;
-            --cp-border: #334155;
-            --cp-border-light: #2d3748;
-            --cp-primary-bg: rgba(99, 102, 241, 0.15);
+            --cp-surface-raised: #334155;
+            --cp-surface-overlay: #2d3748;
+            --cp-bg: #0f172a;
+            --cp-border: #475569;
+            --cp-border-light: #334155;
+            --cp-primary-bg: rgba(99, 102, 241, 0.2);
             --cp-success-bg: rgba(16, 185, 129, 0.15);
+            --cp-success-text: #34d399;
             --cp-warning-bg: rgba(245, 158, 11, 0.15);
+            --cp-warning-text: #fbbf24;
             --cp-danger-bg: rgba(239, 68, 68, 0.15);
+            --cp-danger-text: #fca5a5;
+            --cp-info-text: #a5b4fc;
             --cp-info-bg: rgba(59, 130, 246, 0.15);
+            --cp-fee-free: #34d399;
+            --cp-reward-label: #a5b4fc;
+            --cp-reward-value: #e0e7ff;
+            --cp-sub-earned-label: #34d399;
+            --cp-sub-earned-value: #a7f3d0;
+            --cp-annual-value: #a5b4fc;
+            --cp-shadow-sm: 0 1px 3px rgba(0,0,0,0.2), 0 1px 2px rgba(0,0,0,0.3);
+            --cp-shadow-md: 0 4px 6px -1px rgba(0,0,0,0.3), 0 2px 4px -2px rgba(0,0,0,0.2);
+            --cp-shadow-lg: 0 10px 15px -3px rgba(0,0,0,0.3), 0 4px 6px -4px rgba(0,0,0,0.2);
         }
 
-        /* Body and main app background */
+        /* ---- Global ---- */
         .stApp {
-            background: #0f172a;
-            color: var(--cp-text);
+            background: var(--cp-bg) !important;
+            color: var(--cp-text) !important;
         }
-
-        /* Main content area */
         section[data-testid="stMain"] {
-            background: #0f172a;
+            background: var(--cp-bg) !important;
         }
 
-        /* Typography - ensure readability */
+        /* ---- Typography ---- */
         h1, h2, h3, h4, h5, h6 {
             color: var(--cp-text) !important;
         }
-
-        p, span, div {
+        p, span, div, li, td, th, label {
             color: var(--cp-text);
         }
 
-        /* Card containers */
+        /* ---- Card containers ---- */
         .card-container {
-            background: var(--cp-surface);
-            border-color: var(--cp-border);
-            color: var(--cp-text);
+            background: var(--cp-surface) !important;
+            border-color: var(--cp-border) !important;
+            color: var(--cp-text) !important;
         }
 
-        /* Auth container */
+        /* ---- Auth container ---- */
         .auth-container {
-            background: var(--cp-surface);
-            border-color: var(--cp-border);
+            background: var(--cp-surface) !important;
+            border-color: var(--cp-border) !important;
+        }
+        .auth-logo h1 {
+            background: linear-gradient(135deg, var(--cp-primary-light) 0%, #a78bfa 100%) !important;
+            -webkit-background-clip: text !important;
+            -webkit-text-fill-color: transparent !important;
+        }
+        .auth-tagline {
+            color: var(--cp-text-secondary) !important;
         }
 
-        /* Summary cards */
+        /* ---- Summary cards ---- */
         .summary-card {
-            background: var(--cp-surface);
-            border-color: var(--cp-border);
+            background: var(--cp-surface) !important;
+            border-color: var(--cp-border) !important;
+            color: var(--cp-text) !important;
         }
-
         .summary-value {
-            color: var(--cp-text);
+            color: var(--cp-text) !important;
         }
 
-        /* Metrics */
+        /* ---- Metrics ---- */
         [data-testid="stMetric"] {
-            background: var(--cp-surface);
-            border-color: var(--cp-border);
+            background: var(--cp-surface) !important;
+            border-color: var(--cp-border) !important;
+        }
+        [data-testid="stMetricValue"] {
+            color: var(--cp-text) !important;
+        }
+        [data-testid="stMetricLabel"] {
+            color: var(--cp-text-secondary) !important;
         }
 
-        /* Forms */
+        /* ---- Forms ---- */
         [data-testid="stForm"] {
-            background: var(--cp-surface);
-            border-color: var(--cp-border);
+            background: var(--cp-surface) !important;
+            border-color: var(--cp-border) !important;
         }
 
-        /* Input fields */
+        /* ---- Inputs ---- */
         .stTextInput > div > div > input,
         .stTextArea > div > div > textarea,
         .stNumberInput > div > div > input,
         .stSelectbox > div > div,
+        .stMultiSelect > div > div,
         .stDateInput > div > div > input {
             background: var(--cp-surface-raised) !important;
             color: var(--cp-text) !important;
             border-color: var(--cp-border) !important;
         }
-
-        /* Input labels */
         .stTextInput > label,
         .stTextArea > label,
         .stNumberInput > label,
         .stSelectbox > label,
-        .stDateInput > label {
+        .stMultiSelect > label,
+        .stDateInput > label,
+        .stCheckbox label {
             color: var(--cp-text-secondary) !important;
         }
 
-        /* Buttons - keep primary buttons vibrant, adjust secondary */
-        .stButton > button:not([kind="primary"]):not([data-testid="stBaseButton-primary"]) {
+        /* ---- ALL Buttons (critical fix) ---- */
+        .stButton > button {
             background: var(--cp-surface) !important;
             color: var(--cp-text) !important;
             border-color: var(--cp-border) !important;
         }
-
-        .stButton > button:not([kind="primary"]):not([data-testid="stBaseButton-primary"]):hover {
+        .stButton > button:hover {
             background: var(--cp-surface-raised) !important;
+            border-color: var(--cp-primary-light) !important;
+        }
+        /* Keep primary buttons vibrant */
+        .stButton > button[kind="primary"],
+        .stButton > button[data-testid="stBaseButton-primary"] {
+            background: linear-gradient(135deg, var(--cp-primary) 0%, var(--cp-primary-dark) 100%) !important;
+            color: white !important;
+            border: none !important;
         }
 
-        /* Tabs - dark theme */
+        /* ---- Tabs ---- */
         .stTabs [data-baseweb="tab-list"] {
-            background: var(--cp-surface);
-            border-color: var(--cp-border);
-        }
-
-        .stTabs [data-baseweb="tab"] {
-            color: var(--cp-text-secondary);
-        }
-
-        .stTabs [data-baseweb="tab"]:hover {
-            background: var(--cp-primary-bg);
-            color: var(--cp-primary-light);
-        }
-
-        /* Expanders */
-        [data-testid="stExpander"] {
-            background: var(--cp-surface);
-            border-color: var(--cp-border) !important;
-        }
-
-        [data-testid="stExpander"] summary {
-            color: var(--cp-text);
-        }
-
-        /* Benefit items */
-        .benefit-item {
-            background: var(--cp-surface-raised);
-            border-left-color: var(--cp-border);
-            color: var(--cp-text);
-        }
-
-        .benefit-item:hover {
-            background: var(--cp-surface);
-        }
-
-        /* Status badges - adjust for dark mode */
-        .badge-warning {
-            background: var(--cp-warning-bg);
-            color: #fbbf24;
-        }
-
-        .badge-success {
-            background: var(--cp-success-bg);
-            color: #34d399;
-        }
-
-        .badge-danger {
-            background: var(--cp-danger-bg);
-            color: #f87171;
-        }
-
-        .badge-info {
-            background: var(--cp-primary-bg);
-            color: #a5b4fc;
-        }
-
-        .badge-muted {
-            background: var(--cp-surface-raised);
-            color: var(--cp-text-secondary);
-        }
-
-        /* Alerts (st.info, st.warning, etc) */
-        [data-testid="stAlert"] {
             background: var(--cp-surface) !important;
             border-color: var(--cp-border) !important;
         }
+        .stTabs [data-baseweb="tab"] {
+            color: var(--cp-text-secondary) !important;
+        }
+        .stTabs [data-baseweb="tab"]:hover {
+            background: var(--cp-primary-bg) !important;
+            color: var(--cp-primary-light) !important;
+        }
 
-        /* Download button */
+        /* ---- Expanders ---- */
+        [data-testid="stExpander"] {
+            background: var(--cp-surface) !important;
+            border-color: var(--cp-border) !important;
+        }
+        [data-testid="stExpander"] summary,
+        [data-testid="stExpander"] summary span {
+            color: var(--cp-text) !important;
+        }
+
+        /* ---- Benefit items ---- */
+        .benefit-item {
+            background: var(--cp-surface-raised) !important;
+            border-left-color: var(--cp-border) !important;
+            color: var(--cp-text) !important;
+        }
+        .benefit-item:hover {
+            background: var(--cp-surface-overlay) !important;
+        }
+        .benefit-item.used {
+            background: var(--cp-success-bg) !important;
+            border-left-color: var(--cp-success) !important;
+            color: var(--cp-success-text) !important;
+        }
+        .benefit-item.unused {
+            background: var(--cp-warning-bg) !important;
+            border-left-color: var(--cp-warning) !important;
+            color: var(--cp-warning-text) !important;
+        }
+
+        /* ---- Status badges ---- */
+        .badge-warning {
+            background: var(--cp-warning-bg) !important;
+            color: var(--cp-warning-text) !important;
+            border-color: rgba(245, 158, 11, 0.3) !important;
+        }
+        .badge-success {
+            background: var(--cp-success-bg) !important;
+            color: var(--cp-success-text) !important;
+            border-color: rgba(16, 185, 129, 0.3) !important;
+        }
+        .badge-danger {
+            background: var(--cp-danger-bg) !important;
+            color: var(--cp-danger-text) !important;
+            border-color: rgba(239, 68, 68, 0.3) !important;
+        }
+        .badge-info {
+            background: var(--cp-primary-bg) !important;
+            color: var(--cp-info-text) !important;
+            border-color: rgba(99, 102, 241, 0.3) !important;
+        }
+        .badge-muted {
+            background: var(--cp-surface-raised) !important;
+            color: var(--cp-text-secondary) !important;
+            border-color: var(--cp-border) !important;
+        }
+
+        /* ---- Alerts ---- */
+        [data-testid="stAlert"] {
+            background: var(--cp-surface) !important;
+            border-color: var(--cp-border) !important;
+            color: var(--cp-text) !important;
+        }
+        [data-testid="stAlert"] p,
+        [data-testid="stAlert"] span {
+            color: var(--cp-text) !important;
+        }
+
+        /* ---- Download button ---- */
         .stDownloadButton > button {
             background: var(--cp-surface) !important;
             color: var(--cp-text) !important;
             border-color: var(--cp-border) !important;
         }
 
-        /* Auth page gradient - adjust for dark mode */
-        .auth-logo h1 {
-            background: linear-gradient(135deg, var(--cp-primary-light) 0%, #a78bfa 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-        }
-
-        .auth-tagline {
-            color: var(--cp-text-secondary);
-        }
-
-        /* Scrollbar - darker */
+        /* ---- Scrollbar ---- */
         ::-webkit-scrollbar-thumb {
             background: #475569;
         }
-
         ::-webkit-scrollbar-thumb:hover {
             background: #64748b;
         }
 
-        /* Demo banner - dark mode version */
+        /* ---- Demo banner ---- */
         .demo-banner {
-            background: var(--cp-primary-bg);
-            border-color: rgba(99, 102, 241, 0.3);
+            background: var(--cp-primary-bg) !important;
+            border-color: rgba(99, 102, 241, 0.3) !important;
         }
 
-        /* Dividers */
+        /* ---- Dividers ---- */
         hr {
             border-color: var(--cp-border) !important;
         }
 
-        /* Benefits progress bar */
+        /* ---- Progress bar ---- */
         .benefits-progress {
-            background: var(--cp-surface-raised);
+            background: var(--cp-surface-raised) !important;
         }
 
-        /* Ensure sidebar stays as designed (already has dark gradient) */
+        /* ---- Selectbox / Dropdown styling ---- */
+        [data-baseweb="select"] > div,
+        [data-baseweb="popover"] > div {
+            background: var(--cp-surface) !important;
+            color: var(--cp-text) !important;
+        }
+        [data-baseweb="menu"] {
+            background: var(--cp-surface) !important;
+        }
+        [data-baseweb="menu"] li {
+            color: var(--cp-text) !important;
+        }
+        [data-baseweb="menu"] li:hover {
+            background: var(--cp-surface-raised) !important;
+        }
+
+        /* ---- Checkbox ---- */
+        .stCheckbox label span {
+            color: var(--cp-text) !important;
+        }
+
+        /* ---- Caption / small text ---- */
+        [data-testid="stCaptionContainer"],
+        .stCaption {
+            color: var(--cp-text-muted) !important;
+        }
+
+        /* ---- Markdown content (inline-styled elements) ---- */
+        [data-testid="stMarkdownContainer"] {
+            color: var(--cp-text) !important;
+        }
+
+        /* ---- Sidebar (keep existing dark gradient) ---- */
         [data-testid="stSidebar"] {
-            /* Keep existing dark gradient - don't override */
+            /* Already dark — no override needed */
+        }
+
+        /* ---- Action Required items / 5-24 items ---- */
+        .cp-action-item, .cp-tracker-item {
+            background: var(--cp-surface) !important;
+            border-color: var(--cp-border) !important;
+            color: var(--cp-text) !important;
         }
     }
     
@@ -1137,19 +1227,19 @@ def show_auth_page():
             <div style="display: flex; justify-content: center; gap: 32px; flex-wrap: wrap; margin-top: 16px;">
                 <div style="text-align: center;">
                     <div style="font-size: 1.5rem;">🎯</div>
-                    <div style="font-size: 0.8rem; color: #64748b; font-weight: 600; margin-top: 4px;">Track SUBs</div>
+                    <div style="font-size: 0.8rem; color: var(--cp-text-secondary); font-weight: 600; margin-top: 4px;">Track SUBs</div>
                 </div>
                 <div style="text-align: center;">
                     <div style="font-size: 1.5rem;">💰</div>
-                    <div style="font-size: 0.8rem; color: #64748b; font-weight: 600; margin-top: 4px;">Max Benefits</div>
+                    <div style="font-size: 0.8rem; color: var(--cp-text-secondary); font-weight: 600; margin-top: 4px;">Max Benefits</div>
                 </div>
                 <div style="text-align: center;">
                     <div style="font-size: 1.5rem;">📊</div>
-                    <div style="font-size: 0.8rem; color: #64748b; font-weight: 600; margin-top: 4px;">5/24 Tracker</div>
+                    <div style="font-size: 0.8rem; color: var(--cp-text-secondary); font-weight: 600; margin-top: 4px;">5/24 Tracker</div>
                 </div>
                 <div style="text-align: center;">
                     <div style="font-size: 1.5rem;">🤖</div>
-                    <div style="font-size: 0.8rem; color: #64748b; font-weight: 600; margin-top: 4px;">AI-Powered</div>
+                    <div style="font-size: 0.8rem; color: var(--cp-text-secondary); font-weight: 600; margin-top: 4px;">AI-Powered</div>
                 </div>
             </div>
         </div>
@@ -2598,7 +2688,7 @@ def render_card_item(card, show_issuer_header: bool = True, selection_mode: bool
             if card.annual_fee > 0:
                 st.markdown(f"<div style='padding: 8px 0; text-align: right;'>${card.annual_fee}/yr</div>", unsafe_allow_html=True)
             else:
-                st.markdown("<div style='padding: 8px 0; text-align: right; color: #28a745;'>No AF</div>", unsafe_allow_html=True)
+                st.markdown("<div style='padding: 8px 0; text-align: right; color: var(--cp-fee-free);'>No AF</div>", unsafe_allow_html=True)
 
         with expand_col:
             expand_icon = "▼" if not is_expanded else "▲"
@@ -2644,8 +2734,8 @@ def render_card_item(card, show_issuer_header: bool = True, selection_mode: bool
                 f"<div style='margin-bottom: 10px; padding: 10px 14px; "
                 f"background: linear-gradient(135deg, #eef2ff 0%, #e0e7ff 100%); "
                 f"border-radius: 10px; border-left: 4px solid #6366f1;'>"
-                f"<span style='font-size: 0.75rem; color: #4f46e5; font-weight: 600; letter-spacing: 0.05em;'>🎁 REWARD</span><br>"
-                f"<span style='font-size: 1.1rem; color: #1e1b4b; font-weight: 700;'>{card.signup_bonus.points_or_cash}</span>"
+                f"<span style='font-size: 0.75rem; color: var(--cp-reward-label); font-weight: 600; letter-spacing: 0.05em;'>🎁 REWARD</span><br>"
+                f"<span style='font-size: 1.1rem; color: var(--cp-reward-value); font-weight: 700;'>{card.signup_bonus.points_or_cash}</span>"
                 f"</div>",
                 unsafe_allow_html=True
             )
@@ -2663,23 +2753,23 @@ def render_card_item(card, show_issuer_header: bool = True, selection_mode: bool
                     # Create visual progress bar with HTML/CSS
                     if progress >= 1.0:
                         bar_color = "#10b981"
-                        text_color = "#065f46"
+                        text_color = "var(--cp-success-text)"
                     elif progress >= 0.75:
                         bar_color = "#6366f1"
-                        text_color = "#3730a3"
+                        text_color = "var(--cp-annual-value)"
                     elif progress >= 0.5:
                         bar_color = "#f59e0b"
-                        text_color = "#92400e"
+                        text_color = "var(--cp-warning-text)"
                     else:
                         bar_color = "#94a3b8"
-                        text_color = "#475569"
+                        text_color = "var(--cp-text-muted)"
 
                     st.markdown(
                         f"<div style='margin-bottom: 6px;'>"
                         f"<span style='font-weight: 600; font-size: 0.85rem; color: {text_color};'>Spending Progress: {progress_pct}%</span>"
-                        f"<span style='float: right; color: #64748b; font-size: 0.85rem;'>${card.sub_spend_progress:,.0f} / ${card.signup_bonus.spend_requirement:,.0f}</span>"
+                        f"<span style='float: right; color: var(--cp-text-secondary); font-size: 0.85rem;'>${card.sub_spend_progress:,.0f} / ${card.signup_bonus.spend_requirement:,.0f}</span>"
                         f"</div>"
-                        f"<div style='background: #e2e8f0; border-radius: 6px; height: 8px; overflow: hidden;'><!-- no text content -->"
+                        f"<div style='background: var(--cp-border); border-radius: 6px; height: 8px; overflow: hidden;'><!-- no text content -->"
                         f"<div style='background: {bar_color}; height: 100%; width: {progress_pct}%; transition: width 0.4s ease; border-radius: 6px;'><!-- no text content --></div>"
                         f"</div>",
                         unsafe_allow_html=True
@@ -2691,7 +2781,7 @@ def render_card_item(card, show_issuer_header: bool = True, selection_mode: bool
                         st.caption("✓ Spend requirement met!")
                 else:
                     st.markdown(
-                        f"<div style='color: #6c757d;'>"
+                        f"<div style='color: var(--cp-text-muted);'>"
                         f"<span style='font-weight: 600;'>Spend Target:</span> ${card.signup_bonus.spend_requirement:,.0f}"
                         f"</div>",
                         unsafe_allow_html=True
@@ -2723,10 +2813,10 @@ def render_card_item(card, show_issuer_header: bool = True, selection_mode: bool
         # Show unused benefits indicator (preview row)
         if unused_benefits > 0 and not is_all_snoozed:
             st.markdown(
-                f"<div style='background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%); "
+                f"<div style='background: var(--cp-warning-bg); "
                 f"padding: 10px 14px; border-radius: 10px; margin: 8px 0; "
                 f"border-left: 4px solid #f59e0b; display: flex; justify-content: space-between; align-items: center;'>"
-                f"<span style='color: #92400e; font-weight: 600; font-size: 0.9rem;'>⚡ {unused_benefits} benefit(s) available this period</span>"
+                f"<span style='color: var(--cp-warning-text); font-weight: 600; font-size: 0.9rem;'>⚡ {unused_benefits} benefit(s) available this period</span>"
                 f"</div>",
                 unsafe_allow_html=True
             )
@@ -2740,9 +2830,9 @@ def render_card_item(card, show_issuer_header: bool = True, selection_mode: bool
             # Show option to unsnooze
             days_until_unsnooze = (card.benefits_reminder_snoozed_until - date.today()).days
             st.markdown(
-                f"<div style='background: #f1f5f9; padding: 10px 14px; border-radius: 10px; margin: 8px 0; "
+                f"<div style='background: var(--cp-surface-overlay); padding: 10px 14px; border-radius: 10px; margin: 8px 0; "
                 f"display: flex; justify-content: space-between; align-items: center;'>"
-                f"<span style='color: #64748b; font-size: 0.85rem;'>🔕 Reminders snoozed ({days_until_unsnooze}d remaining)</span>"
+                f"<span style='color: var(--cp-text-secondary); font-size: 0.85rem;'>🔕 Reminders snoozed ({days_until_unsnooze}d remaining)</span>"
                 f"</div>",
                 unsafe_allow_html=True
             )
@@ -2772,9 +2862,9 @@ def render_card_item(card, show_issuer_header: bool = True, selection_mode: bool
                 if card.signup_bonus:
                     if card.sub_achieved:
                         st.markdown(
-                            f"<div style='background: #ecfdf5; padding: 10px 14px; border-radius: 10px; border-left: 4px solid #10b981;'>"
-                            f"<span style='font-size: 0.75rem; color: #065f46; font-weight: 600; letter-spacing: 0.05em;'>✓ SUB EARNED</span><br>"
-                            f"<span style='color: #064e3b; font-weight: 700;'>{card.signup_bonus.points_or_cash}</span>"
+                            f"<div style='background: var(--cp-success-bg); padding: 10px 14px; border-radius: 10px; border-left: 4px solid var(--cp-success);'>"
+                            f"<span style='font-size: 0.75rem; color: var(--cp-sub-earned-label); font-weight: 600; letter-spacing: 0.05em;'>✓ SUB EARNED</span><br>"
+                            f"<span style='color: var(--cp-sub-earned-value); font-weight: 700;'>{card.signup_bonus.points_or_cash}</span>"
                             f"</div>",
                             unsafe_allow_html=True
                         )
@@ -2807,15 +2897,15 @@ def render_card_item(card, show_issuer_header: bool = True, selection_mode: bool
 
                         # Create visual benefit item
                         if is_used:
-                            bg_color = "#d4edda"
-                            border_color = "#28a745"
+                            bg_color = "var(--cp-success-bg)"
+                            border_color = "var(--cp-success)"
                             icon = "✓"
-                            icon_color = "#28a745"
+                            icon_color = "var(--cp-success)"
                         else:
-                            bg_color = "#fff3cd"
-                            border_color = "#ffc107"
+                            bg_color = "var(--cp-warning-bg)"
+                            border_color = "var(--cp-warning)"
                             icon = "○"
-                            icon_color = "#856404"
+                            icon_color = "var(--cp-warning-text)"
 
                         # Checkbox for marking as used
                         checkbox_key = f"credit_{card.id}_{credit.name}"
@@ -2850,8 +2940,8 @@ def render_card_item(card, show_issuer_header: bool = True, selection_mode: bool
 
                     # Total value summary
                     st.markdown(
-                        f"<div style='background: linear-gradient(135deg, #eef2ff, #e0e7ff); padding: 12px 14px; border-radius: 10px; margin-top: 12px;'>"
-                        f"<span style='font-weight: 700; color: #3730a3; font-size: 0.95rem;'>Annual Value: ~${total_value:,.0f}</span>"
+                        f"<div style='background: var(--cp-primary-bg); padding: 12px 14px; border-radius: 10px; margin-top: 12px;'>"
+                        f"<span style='font-weight: 700; color: var(--cp-annual-value); font-size: 0.95rem;'>Annual Value: ~${total_value:,.0f}</span>"
                         f"</div>",
                         unsafe_allow_html=True
                     )
@@ -3386,27 +3476,27 @@ def render_action_required_tab():
             if days < 0:
                 urgency = "EXPIRED"
                 color = "#ef4444"
-                bg = "#fef2f2"
+                bg = "var(--cp-danger-bg)"
             elif days <= 7:
                 urgency = "URGENT"
                 color = "#ef4444"
-                bg = "#fef2f2"
+                bg = "var(--cp-danger-bg)"
             elif days <= 14:
                 urgency = "SOON"
                 color = "#f59e0b"
-                bg = "#fffbeb"
+                bg = "var(--cp-warning-bg)"
             else:
                 urgency = "ATTENTION"
                 color = "#f59e0b"
-                bg = "#fffbeb"
+                bg = "var(--cp-warning-bg)"
 
             st.markdown(
-                f"<div style='padding: 14px 16px; margin: 8px 0; border-left: 4px solid {color}; background: {bg}; border-radius: 10px; color: #1a1a2e;'>"
+                f"<div style='padding: 14px 16px; margin: 8px 0; border-left: 4px solid {color}; background: {bg}; border-radius: 10px; color: var(--cp-text-on-surface);'>"
                 f"<div style='display: flex; align-items: center; gap: 8px; margin-bottom: 4px;'>"
                 f"<span style='font-size: 0.7rem; font-weight: 700; background: {color}; color: white; padding: 2px 8px; border-radius: 4px; letter-spacing: 0.05em;'>{urgency}</span>"
                 f"<span style='font-weight: 600;'>{item['display_name']}</span>"
                 f"</div>"
-                f"<span style='color: #64748b; font-size: 0.85rem;'>"
+                f"<span style='color: var(--cp-text-secondary); font-size: 0.85rem;'>"
                 f"Deadline: {item['deadline']} ({days}d) · "
                 f"Spend: ${item['requirement']:,.0f} · "
                 f"Reward: {item['reward']}"
@@ -3426,18 +3516,18 @@ def render_action_required_tab():
             days = item["days_until"]
             if days <= 14:
                 color = "#ef4444"
-                bg = "#fef2f2"
+                bg = "var(--cp-danger-bg)"
             elif days <= 30:
                 color = "#f59e0b"
-                bg = "#fffbeb"
+                bg = "var(--cp-warning-bg)"
             else:
                 color = "#6366f1"
-                bg = "#eef2ff"
+                bg = "var(--cp-primary-bg)"
 
             st.markdown(
-                f"<div style='padding: 14px 16px; margin: 8px 0; border-left: 4px solid {color}; background: {bg}; border-radius: 10px; color: #1a1a2e;'>"
+                f"<div style='padding: 14px 16px; margin: 8px 0; border-left: 4px solid {color}; background: {bg}; border-radius: 10px; color: var(--cp-text-on-surface);'>"
                 f"<span style='font-weight: 600;'>{item['display_name']}</span><br>"
-                f"<span style='color: #64748b; font-size: 0.85rem;'>"
+                f"<span style='color: var(--cp-text-secondary); font-size: 0.85rem;'>"
                 f"Fee: ${item['amount']:.0f} · Due: {item['fee_date']} ({days}d)"
                 f"</span>"
                 f"</div>",
@@ -3506,9 +3596,9 @@ def render_action_required_tab():
 
         for item in missing_data:
             st.markdown(
-                f"<div style='padding: 10px 14px; margin: 4px 0; border-left: 3px solid #94a3b8; background: #f8fafc; border-radius: 10px; color: #1a1a2e;'>"
+                f"<div style='padding: 10px 14px; margin: 4px 0; border-left: 3px solid var(--cp-text-muted); background: var(--cp-surface-raised); border-radius: 10px; color: var(--cp-text-on-surface);'>"
                 f"<span style='font-weight: 600;'>{item['display_name']}</span>"
-                f"<span style='color: #64748b; font-size: 0.85rem;'> — Missing opened date</span>"
+                f"<span style='color: var(--cp-text-secondary); font-size: 0.85rem;'> — Missing opened date</span>"
                 f"</div>",
                 unsafe_allow_html=True
             )
@@ -3609,18 +3699,18 @@ def render_five_twenty_four_tab():
         # Color code by urgency
         if days <= 30:
             color = "#10b981"  # Green - drops soon
-            bg = "#ecfdf5"
+            bg = "var(--cp-success-bg)"
         elif days <= 180:
             color = "#f59e0b"  # Yellow
-            bg = "#fffbeb"
+            bg = "var(--cp-warning-bg)"
         else:
             color = "#94a3b8"  # Gray
-            bg = "#f8fafc"
+            bg = "var(--cp-surface-raised)"
 
         st.markdown(
-            f"<div style='padding: 14px 16px; margin: 8px 0; border-left: 4px solid {color}; background: {bg}; border-radius: 10px; color: #1a1a2e;'>"
+            f"<div style='padding: 14px 16px; margin: 8px 0; border-left: 4px solid {color}; background: {bg}; border-radius: 10px; color: var(--cp-text-on-surface);'>"
             f"<span style='font-weight: 600;'>{display_name}</span><br>"
-            f"<span style='color: #64748b; font-size: 0.85rem;'>Opened: {card.opened_date} · Drops off: {drop_off} ({days}d)</span>"
+            f"<span style='color: var(--cp-text-secondary); font-size: 0.85rem;'>Opened: {card.opened_date} · Drops off: {drop_off} ({days}d)</span>"
             f"</div>",
             unsafe_allow_html=True
         )
@@ -3650,7 +3740,7 @@ def show_legal_page(page_type):
         <div style="text-align: center; margin-bottom: 32px;">
             <div style="font-size: 3rem; margin-bottom: 8px;">💳</div>
             <h1 style="margin: 0;">ChurnPilot</h1>
-            <p style="color: #64748b; margin-top: 4px;">Credit Card Intelligence</p>
+            <p style="color: var(--cp-text-secondary); margin-top: 4px;">Credit Card Intelligence</p>
         </div>
         """, unsafe_allow_html=True)
         
