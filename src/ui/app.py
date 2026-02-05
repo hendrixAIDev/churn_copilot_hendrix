@@ -3,6 +3,8 @@
 import streamlit as st
 from datetime import date, datetime, timedelta
 import sys
+import os
+import psycopg2
 from pathlib import Path
 # Session persistence via query params.
 # Query params persist across:
@@ -1102,6 +1104,57 @@ def init_session_state():
         st.session_state.show_welcome = True
 
 
+def submit_feedback(feedback_type: str, message: str, page: str = None, user_agent: str = None):
+    """Submit feedback to the database.
+    
+    Args:
+        feedback_type: Type of feedback ('bug', 'feature', 'general')
+        message: Feedback message
+        page: Current page/tab name
+        user_agent: Browser user agent string
+        
+    Returns:
+        True if successful, False otherwise
+    """
+    try:
+        # Get database connection from env
+        db_url = os.getenv("DATABASE_URL")
+        if not db_url:
+            # Try to load from .env file if not in environment
+            from dotenv import load_dotenv
+            env_path = Path(__file__).parent.parent.parent / ".env"
+            load_dotenv(env_path)
+            db_url = os.getenv("DATABASE_URL")
+        
+        if not db_url:
+            st.error("Database connection not configured")
+            return False
+        
+        # Connect and insert
+        conn = psycopg2.connect(db_url)
+        cursor = conn.cursor()
+        
+        user_email = st.session_state.get("user_email")
+        
+        cursor.execute(
+            """
+            INSERT INTO churnpilot_feedback (user_email, feedback_type, message, page, user_agent)
+            VALUES (%s, %s, %s, %s, %s)
+            """,
+            (user_email, feedback_type, message, page, user_agent)
+        )
+        
+        conn.commit()
+        cursor.close()
+        conn.close()
+        
+        return True
+        
+    except Exception as e:
+        st.error(f"Failed to submit feedback: {e}")
+        return False
+
+
 def render_sidebar():
     """Render the sidebar with app info and quick stats."""
     with st.sidebar:
@@ -1255,6 +1308,62 @@ def render_sidebar():
         st.markdown("[US Credit Card Guide](https://www.uscreditcardguide.com)")
         st.markdown("[Doctor of Credit](https://www.doctorofcredit.com)")
         st.markdown("[r/churning](https://reddit.com/r/churning)")
+
+        # Feedback Widget
+        st.divider()
+        with st.expander("💬 Feedback"):
+            st.caption("Help us improve ChurnPilot!")
+            
+            # Get current tab/page
+            current_page = st.session_state.get("current_tab", "Unknown")
+            
+            with st.form("feedback_form"):
+                feedback_type = st.selectbox(
+                    "Type",
+                    options=["general", "bug", "feature"],
+                    format_func=lambda x: {
+                        "bug": "🐛 Bug Report",
+                        "feature": "💡 Feature Request",
+                        "general": "💬 General Feedback"
+                    }[x],
+                    key="feedback_type_select"
+                )
+                
+                feedback_message = st.text_area(
+                    "Message",
+                    placeholder="Tell us what you think...",
+                    key="feedback_message_input",
+                    height=100
+                )
+                
+                submitted = st.form_submit_button("Submit Feedback", use_container_width=True)
+                
+                if submitted:
+                    if not feedback_message or len(feedback_message.strip()) == 0:
+                        st.error("Please enter a message")
+                    else:
+                        # Get user agent (browser info) if available
+                        user_agent = None
+                        try:
+                            from streamlit.runtime.scriptrunner import get_script_run_ctx
+                            ctx = get_script_run_ctx()
+                            if ctx and hasattr(ctx, 'user_info'):
+                                user_agent = str(ctx.user_info)
+                        except:
+                            pass  # User agent is optional
+                        
+                        # Submit feedback
+                        if submit_feedback(
+                            feedback_type=feedback_type,
+                            message=feedback_message.strip(),
+                            page=current_page,
+                            user_agent=user_agent
+                        ):
+                            st.success("✓ Thank you for your feedback!")
+                            st.balloons()
+            
+            st.caption("For technical issues:")
+            st.markdown("[Report on GitHub →](https://github.com/hendrixAIDev/churn_copilot_hendrix/issues)")
 
         st.divider()
         st.caption(f"Library: {len(get_all_templates())} templates")
@@ -3397,15 +3506,19 @@ def main():
     tab1, tab2, tab3, tab4 = st.tabs(["Dashboard", "Action Required", "Add Card", "5/24 Tracker"])
 
     with tab1:
+        st.session_state.current_tab = "Dashboard"
         render_dashboard()
 
     with tab2:
+        st.session_state.current_tab = "Action Required"
         render_action_required_tab()
 
     with tab3:
+        st.session_state.current_tab = "Add Card"
         render_add_card_section()
 
     with tab4:
+        st.session_state.current_tab = "5/24 Tracker"
         render_five_twenty_four_tab()
 
 
