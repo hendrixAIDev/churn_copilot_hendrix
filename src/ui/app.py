@@ -3,6 +3,8 @@
 import streamlit as st
 from datetime import date, datetime, timedelta
 import sys
+import os
+import psycopg2
 from pathlib import Path
 # Session persistence via query params.
 # Query params persist across:
@@ -457,6 +459,285 @@ CUSTOM_CSS = """
         align-items: center;
         gap: 12px;
     }
+
+    /* ===== DARK MODE ===== */
+    @media (prefers-color-scheme: dark) {
+        /* Root variables - dark theme overrides */
+        :root {
+            --cp-text: #e2e8f0;
+            --cp-text-secondary: #94a3b8;
+            --cp-text-muted: #64748b;
+            --cp-surface: #1e293b;
+            --cp-surface-raised: #2d3748;
+            --cp-border: #334155;
+            --cp-border-light: #2d3748;
+            --cp-primary-bg: rgba(99, 102, 241, 0.15);
+            --cp-success-bg: rgba(16, 185, 129, 0.15);
+            --cp-warning-bg: rgba(245, 158, 11, 0.15);
+            --cp-danger-bg: rgba(239, 68, 68, 0.15);
+            --cp-info-bg: rgba(59, 130, 246, 0.15);
+        }
+
+        /* Body and main app background */
+        .stApp {
+            background: #0f172a;
+            color: var(--cp-text);
+        }
+
+        /* Main content area */
+        section[data-testid="stMain"] {
+            background: #0f172a;
+        }
+
+        /* Typography - ensure readability */
+        h1, h2, h3, h4, h5, h6 {
+            color: var(--cp-text) !important;
+        }
+
+        p, span, div {
+            color: var(--cp-text);
+        }
+
+        /* Card containers */
+        .card-container {
+            background: var(--cp-surface);
+            border-color: var(--cp-border);
+            color: var(--cp-text);
+        }
+
+        /* Auth container */
+        .auth-container {
+            background: var(--cp-surface);
+            border-color: var(--cp-border);
+        }
+
+        /* Summary cards */
+        .summary-card {
+            background: var(--cp-surface);
+            border-color: var(--cp-border);
+        }
+
+        .summary-value {
+            color: var(--cp-text);
+        }
+
+        /* Metrics */
+        [data-testid="stMetric"] {
+            background: var(--cp-surface);
+            border-color: var(--cp-border);
+        }
+
+        /* Forms */
+        [data-testid="stForm"] {
+            background: var(--cp-surface);
+            border-color: var(--cp-border);
+        }
+
+        /* Input fields */
+        .stTextInput > div > div > input,
+        .stTextArea > div > div > textarea,
+        .stNumberInput > div > div > input,
+        .stSelectbox > div > div,
+        .stDateInput > div > div > input {
+            background: var(--cp-surface-raised) !important;
+            color: var(--cp-text) !important;
+            border-color: var(--cp-border) !important;
+        }
+
+        /* Input labels */
+        .stTextInput > label,
+        .stTextArea > label,
+        .stNumberInput > label,
+        .stSelectbox > label,
+        .stDateInput > label {
+            color: var(--cp-text-secondary) !important;
+        }
+
+        /* Buttons - keep primary buttons vibrant, adjust secondary */
+        .stButton > button:not([kind="primary"]):not([data-testid="stBaseButton-primary"]) {
+            background: var(--cp-surface) !important;
+            color: var(--cp-text) !important;
+            border-color: var(--cp-border) !important;
+        }
+
+        .stButton > button:not([kind="primary"]):not([data-testid="stBaseButton-primary"]):hover {
+            background: var(--cp-surface-raised) !important;
+        }
+
+        /* Tabs - dark theme */
+        .stTabs [data-baseweb="tab-list"] {
+            background: var(--cp-surface);
+            border-color: var(--cp-border);
+        }
+
+        .stTabs [data-baseweb="tab"] {
+            color: var(--cp-text-secondary);
+        }
+
+        .stTabs [data-baseweb="tab"]:hover {
+            background: var(--cp-primary-bg);
+            color: var(--cp-primary-light);
+        }
+
+        /* Expanders */
+        [data-testid="stExpander"] {
+            background: var(--cp-surface);
+            border-color: var(--cp-border) !important;
+        }
+
+        [data-testid="stExpander"] summary {
+            color: var(--cp-text);
+        }
+
+        /* Benefit items */
+        .benefit-item {
+            background: var(--cp-surface-raised);
+            border-left-color: var(--cp-border);
+            color: var(--cp-text);
+        }
+
+        .benefit-item:hover {
+            background: var(--cp-surface);
+        }
+
+        /* Status badges - adjust for dark mode */
+        .badge-warning {
+            background: var(--cp-warning-bg);
+            color: #fbbf24;
+        }
+
+        .badge-success {
+            background: var(--cp-success-bg);
+            color: #34d399;
+        }
+
+        .badge-danger {
+            background: var(--cp-danger-bg);
+            color: #f87171;
+        }
+
+        .badge-info {
+            background: var(--cp-primary-bg);
+            color: #a5b4fc;
+        }
+
+        .badge-muted {
+            background: var(--cp-surface-raised);
+            color: var(--cp-text-secondary);
+        }
+
+        /* Alerts (st.info, st.warning, etc) */
+        [data-testid="stAlert"] {
+            background: var(--cp-surface) !important;
+            border-color: var(--cp-border) !important;
+        }
+
+        /* Download button */
+        .stDownloadButton > button {
+            background: var(--cp-surface) !important;
+            color: var(--cp-text) !important;
+            border-color: var(--cp-border) !important;
+        }
+
+        /* Auth page gradient - adjust for dark mode */
+        .auth-logo h1 {
+            background: linear-gradient(135deg, var(--cp-primary-light) 0%, #a78bfa 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .auth-tagline {
+            color: var(--cp-text-secondary);
+        }
+
+        /* Scrollbar - darker */
+        ::-webkit-scrollbar-thumb {
+            background: #475569;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #64748b;
+        }
+
+        /* Demo banner - dark mode version */
+        .demo-banner {
+            background: var(--cp-primary-bg);
+            border-color: rgba(99, 102, 241, 0.3);
+        }
+
+        /* Dividers */
+        hr {
+            border-color: var(--cp-border) !important;
+        }
+
+        /* Benefits progress bar */
+        .benefits-progress {
+            background: var(--cp-surface-raised);
+        }
+
+        /* Ensure sidebar stays as designed (already has dark gradient) */
+        [data-testid="stSidebar"] {
+            /* Keep existing dark gradient - don't override */
+        }
+    }
+    
+    /* ===== COOKIE CONSENT BANNER ===== */
+    .cookie-consent-banner {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        background: rgba(26, 26, 46, 0.98);
+        backdrop-filter: blur(10px);
+        border-top: 1px solid rgba(99, 102, 241, 0.3);
+        padding: 16px 20px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        z-index: 9999;
+        box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.15);
+        animation: slideUp 0.3s ease-out;
+    }
+    
+    @keyframes slideUp {
+        from {
+            transform: translateY(100%);
+            opacity: 0;
+        }
+        to {
+            transform: translateY(0);
+            opacity: 1;
+        }
+    }
+    
+    .cookie-consent-text {
+        color: #e0e7ff;
+        font-size: 0.9rem;
+        line-height: 1.5;
+        flex: 1;
+    }
+    
+    .cookie-consent-text a {
+        color: #818cf8;
+        text-decoration: underline;
+    }
+    
+    .cookie-consent-text a:hover {
+        color: #a5b4fc;
+    }
+    
+    @media (max-width: 768px) {
+        .cookie-consent-banner {
+            flex-direction: column;
+            align-items: stretch;
+            padding: 16px;
+        }
+        
+        .cookie-consent-text {
+            font-size: 0.85rem;
+        }
+    }
 </style>
 """
 
@@ -497,6 +778,15 @@ from src.core import (
 from src.core.preferences import PreferencesStorage, UserPreferences
 from src.core.exceptions import ExtractionError, StorageError, FetchError
 from src.core.auth import AuthService, validate_email, validate_password, MIN_PASSWORD_LENGTH, SESSION_TOKEN_BYTES
+from src.core.rate_limit import (
+    check_login_rate_limit,
+    record_login_failure,
+    reset_login_attempts,
+    check_signup_rate_limit,
+    record_signup_attempt,
+    check_feedback_rate_limit,
+    record_feedback_submission,
+)
 from extra_streamlit_components import CookieManager
 
 # Cookie key for session token (survives browser close, unlike query params)
@@ -669,6 +959,44 @@ def check_stored_session() -> bool:
         return False
 
 
+COOKIE_CONSENT_KEY = "churnpilot_cookie_consent"
+
+
+def render_cookie_consent_banner():
+    """Render cookie consent banner if not yet accepted."""
+    # Check if user has already accepted
+    cookie_manager = get_cookie_manager()
+    consent = cookie_manager.get(COOKIE_CONSENT_KEY)
+    
+    if consent == "accepted":
+        return
+    
+    # Create container for banner
+    banner_container = st.container()
+    
+    with banner_container:
+        # Render banner HTML
+        st.markdown("""
+        <div class="cookie-consent-banner">
+            <div class="cookie-consent-text">
+                🍪 ChurnPilot uses cookies to keep you logged in. By continuing to use this app, you accept our use of cookies.
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        # Button to accept (using columns for positioning)
+        _, button_col = st.columns([4, 1])
+        with button_col:
+            if st.button("Got it", key="cookie_consent_accept", use_container_width=True):
+                # Set cookie for 1 year
+                cookie_manager.set(
+                    COOKIE_CONSENT_KEY,
+                    "accepted",
+                    expires_at=datetime.now() + timedelta(days=365)
+                )
+                st.rerun()
+
+
 def show_auth_page():
     """Show login/register page with branded design.
 
@@ -679,7 +1007,7 @@ def show_auth_page():
     try:
         init_database()
     except Exception as e:
-        st.error(f"Database connection failed: {e}")
+        st.error("Something went wrong. Please try again in a moment.")
         return False
 
     # Centered auth layout
@@ -703,8 +1031,8 @@ def show_auth_page():
 
         with tab1:
             with st.form("login_form"):
-                email = st.text_input("Email", key="login_email", placeholder="you@example.com")
-                password = st.text_input("Password", type="password", key="login_password", placeholder="••••••••")
+                email = st.text_input("Email", key="login_email", placeholder="you@example.com", max_chars=254)
+                password = st.text_input("Password", type="password", key="login_password", placeholder="••••••••", max_chars=128)
                 st.write("")  # spacing
                 submitted = st.form_submit_button("Sign In", use_container_width=True, type="primary")
 
@@ -712,36 +1040,63 @@ def show_auth_page():
                     if not email or not password:
                         st.error("Please enter email and password")
                     else:
-                        user = auth.login(email, password)
-                        if user:
-                            # Create persistent session
-                            token = auth.create_session(user.id)
-                            st.session_state.user_id = str(user.id)
-                            st.session_state.user_email = user.email
-                            st.session_state.session_token = token
-                            # Save token to query params for persistence
-                            st.query_params[SESSION_QUERY_PARAM] = token
-                            # Save token to cookie for fresh URL navigation
-                            try:
-                                cookie_manager = get_cookie_manager()
-                                cookie_manager.set(SESSION_COOKIE_KEY, token, expires_at=None)
-                            except Exception:
-                                pass  # Cookie setting is best-effort
-                            # Rerun to refresh with authenticated state
-                            st.rerun()
+                        # Check rate limit
+                        allowed, rate_limit_msg = check_login_rate_limit(email)
+                        if not allowed:
+                            st.error(rate_limit_msg)
                         else:
-                            st.error("Invalid email or password")
+                            user = auth.login(email, password)
+                            if user:
+                                # Reset rate limit on successful login
+                                reset_login_attempts(email)
+                                # Create persistent session
+                                token = auth.create_session(user.id)
+                                st.session_state.user_id = str(user.id)
+                                st.session_state.user_email = user.email
+                                st.session_state.session_token = token
+                                # Save token to query params for persistence
+                                st.query_params[SESSION_QUERY_PARAM] = token
+                                # Save token to cookie for fresh URL navigation
+                                try:
+                                    cookie_manager = get_cookie_manager()
+                                    cookie_manager.set(SESSION_COOKIE_KEY, token, expires_at=None)
+                                except Exception:
+                                    pass  # Cookie setting is best-effort
+                                # Rerun to refresh with authenticated state
+                                st.rerun()
+                            else:
+                                # Record failed attempt
+                                record_login_failure(email)
+                                st.error("Invalid email or password")
 
         with tab2:
             with st.form("register_form"):
-                email = st.text_input("Email", key="register_email", placeholder="you@example.com")
-                password = st.text_input("Password", type="password", key="register_password", placeholder="Min 8 characters")
-                password_confirm = st.text_input("Confirm Password", type="password", key="register_password_confirm", placeholder="••••••••")
+                email = st.text_input("Email", key="register_email", placeholder="you@example.com", max_chars=254)
+                password = st.text_input("Password", type="password", key="register_password", placeholder="Min 8 characters", max_chars=128)
+                password_confirm = st.text_input("Confirm Password", type="password", key="register_password_confirm", placeholder="••••••••", max_chars=128)
                 st.write("")  # spacing
+                
+                # Consent notice
+                st.caption("By creating an account, you agree to our [Privacy Policy](?page=privacy) and [Terms of Service](?page=terms).")
+                
                 submitted = st.form_submit_button("Create Account", use_container_width=True, type="primary")
 
                 if submitted:
-                    if not email:
+                    # Get session ID for rate limiting (use Streamlit's session ID from context)
+                    # Since we can't easily get real IP in Streamlit Cloud, use script_run_id as fallback
+                    try:
+                        from streamlit.runtime.scriptrunner import get_script_run_ctx
+                        ctx = get_script_run_ctx()
+                        session_id = ctx.session_id if ctx else "unknown"
+                    except:
+                        # Fallback if context unavailable
+                        session_id = str(hash(str(st.session_state)))
+                    
+                    # Check signup rate limit
+                    allowed, rate_limit_msg = check_signup_rate_limit(session_id)
+                    if not allowed:
+                        st.error(rate_limit_msg)
+                    elif not email:
                         st.error("Please enter an email address")
                     elif not validate_email(email):
                         st.error("Please enter a valid email address")
@@ -753,6 +1108,9 @@ def show_auth_page():
                         st.error("Passwords do not match")
                     else:
                         try:
+                            # Record signup attempt before attempting registration
+                            record_signup_attempt(session_id)
+                            
                             user = auth.register(email, password)
                             # Create persistent session
                             token = auth.create_session(user.id)
@@ -843,9 +1201,9 @@ def show_user_menu():
 
         with st.expander("Change Password"):
             with st.form("change_password_form"):
-                old_pw = st.text_input("Current Password", type="password")
-                new_pw = st.text_input("New Password", type="password")
-                new_pw_confirm = st.text_input("Confirm New Password", type="password")
+                old_pw = st.text_input("Current Password", type="password", max_chars=128)
+                new_pw = st.text_input("New Password", type="password", max_chars=128)
+                new_pw_confirm = st.text_input("Confirm New Password", type="password", max_chars=128)
                 submitted = st.form_submit_button("Update Password")
 
                 if submitted:
@@ -861,6 +1219,50 @@ def show_user_menu():
                             st.success("Password changed!")
                         else:
                             st.error("Current password is incorrect")
+        
+        # Delete Account section
+        with st.expander("⚠️ Delete Account"):
+            st.warning("This will permanently delete your account and all your data (cards, benefits, settings). **This cannot be undone.**")
+            
+            with st.form("delete_account_form"):
+                st.markdown("**To confirm deletion, type:** `DELETE`")
+                confirmation_text = st.text_input("Confirmation", placeholder="Type DELETE to confirm", max_chars=50)
+                delete_button = st.form_submit_button(
+                    "Delete My Account",
+                    type="primary",
+                    use_container_width=True
+                )
+                
+                if delete_button:
+                    if confirmation_text != "DELETE":
+                        st.error("Please type DELETE (all caps) to confirm account deletion")
+                    else:
+                        try:
+                            auth = AuthService()
+                            if auth.delete_account(UUID(st.session_state.user_id)):
+                                # Clear session
+                                if "session_token" in st.session_state:
+                                    auth.delete_session(st.session_state.session_token)
+                                    del st.session_state.session_token
+                                # Clear query params
+                                st.query_params.clear()
+                                # Clear session cookie
+                                try:
+                                    cookie_manager = get_cookie_manager()
+                                    cookie_manager.delete(SESSION_COOKIE_KEY)
+                                except Exception:
+                                    pass
+                                # Clear all session state
+                                for key in list(st.session_state.keys()):
+                                    del st.session_state[key]
+                                # Show success and redirect
+                                st.success("✅ Account deleted successfully")
+                                st.info("Redirecting to login page...")
+                                st.rerun()
+                            else:
+                                st.error("Failed to delete account. Please try again.")
+                        except Exception as e:
+                            st.error("Something went wrong. Please try again in a moment.")
 
 
 def init_session_state():
@@ -879,6 +1281,57 @@ def init_session_state():
         st.session_state.demo_mode = False
     if "show_welcome" not in st.session_state:
         st.session_state.show_welcome = True
+
+
+def submit_feedback(feedback_type: str, message: str, page: str = None, user_agent: str = None):
+    """Submit feedback to the database.
+    
+    Args:
+        feedback_type: Type of feedback ('bug', 'feature', 'general')
+        message: Feedback message
+        page: Current page/tab name
+        user_agent: Browser user agent string
+        
+    Returns:
+        True if successful, False otherwise
+    """
+    try:
+        # Get database connection from env
+        db_url = os.getenv("DATABASE_URL")
+        if not db_url:
+            # Try to load from .env file if not in environment
+            from dotenv import load_dotenv
+            env_path = Path(__file__).parent.parent.parent / ".env"
+            load_dotenv(env_path)
+            db_url = os.getenv("DATABASE_URL")
+        
+        if not db_url:
+            st.error("Database connection not configured")
+            return False
+        
+        # Connect and insert
+        conn = psycopg2.connect(db_url)
+        cursor = conn.cursor()
+        
+        user_email = st.session_state.get("user_email")
+        
+        cursor.execute(
+            """
+            INSERT INTO churnpilot_feedback (user_email, feedback_type, message, page, user_agent)
+            VALUES (%s, %s, %s, %s, %s)
+            """,
+            (user_email, feedback_type, message, page, user_agent)
+        )
+        
+        conn.commit()
+        cursor.close()
+        conn.close()
+        
+        return True
+        
+    except Exception as e:
+        st.error(f"Failed to submit feedback: {e}")
+        return False
 
 
 def render_sidebar():
@@ -1035,8 +1488,80 @@ def render_sidebar():
         st.markdown("[Doctor of Credit](https://www.doctorofcredit.com)")
         st.markdown("[r/churning](https://reddit.com/r/churning)")
 
+        # Feedback Widget
+        st.divider()
+        with st.expander("💬 Feedback"):
+            st.caption("Help us improve ChurnPilot!")
+            
+            # Get current tab/page
+            current_page = st.session_state.get("current_tab", "Unknown")
+            
+            with st.form("feedback_form"):
+                feedback_type = st.selectbox(
+                    "Type",
+                    options=["general", "bug", "feature"],
+                    format_func=lambda x: {
+                        "bug": "🐛 Bug Report",
+                        "feature": "💡 Feature Request",
+                        "general": "💬 General Feedback"
+                    }[x],
+                    key="feedback_type_select"
+                )
+                
+                feedback_message = st.text_area(
+                    "Message",
+                    placeholder="Tell us what you think...",
+                    key="feedback_message_input",
+                    height=100,
+                    max_chars=10000
+                )
+                
+                submitted = st.form_submit_button("Submit Feedback", use_container_width=True)
+                
+                if submitted:
+                    if not feedback_message or len(feedback_message.strip()) == 0:
+                        st.error("Please enter a message")
+                    else:
+                        # Check feedback rate limit
+                        user_id = st.session_state.get("user_id", "anonymous")
+                        allowed, rate_limit_msg = check_feedback_rate_limit(user_id)
+                        
+                        if not allowed:
+                            st.error(rate_limit_msg)
+                        else:
+                            # Get user agent (browser info) if available
+                            user_agent = None
+                            try:
+                                from streamlit.runtime.scriptrunner import get_script_run_ctx
+                                ctx = get_script_run_ctx()
+                                if ctx and hasattr(ctx, 'user_info'):
+                                    user_agent = str(ctx.user_info)
+                            except:
+                                pass  # User agent is optional
+                            
+                            # Submit feedback
+                            if submit_feedback(
+                                feedback_type=feedback_type,
+                                message=feedback_message.strip(),
+                                page=current_page,
+                                user_agent=user_agent
+                            ):
+                                # Record successful feedback submission
+                                record_feedback_submission(user_id)
+                                st.success("✓ Thank you for your feedback!")
+                                st.balloons()
+            
+            st.caption("For technical issues:")
+            st.markdown("[Report on GitHub →](https://github.com/hendrixAIDev/churn_copilot_hendrix/issues)")
+
         st.divider()
         st.caption(f"Library: {len(get_all_templates())} templates")
+        
+        # Legal footer
+        st.divider()
+        st.caption("**Legal**")
+        st.markdown("[Privacy Policy](?page=privacy)")
+        st.markdown("[Terms of Service](?page=terms)")
 
 
 def render_add_card_section():
@@ -1130,6 +1655,7 @@ def render_add_card_section():
                         "Nickname",
                         placeholder="e.g., P2's Card",
                         key="lib_nickname",
+                        max_chars=100
                     )
                 with col2:
                     lib_opened_date = st.date_input(
@@ -1146,6 +1672,7 @@ def render_add_card_section():
                             "Bonus Amount",
                             placeholder="e.g., 80,000 points",
                             key="lib_sub_bonus",
+                            max_chars=200
                         )
                         lib_sub_spend = st.number_input(
                             "Spend Requirement ($)",
@@ -1188,11 +1715,12 @@ def render_add_card_section():
                         lib_opened_date
                     ))
 
-                    # Show errors (blocking)
+                    # Show errors (blocking) — use return instead of st.stop()
+                    # to avoid halting all page rendering (which breaks tab navigation)
                     if has_errors(validation_results):
                         for error_msg in get_error_messages(validation_results):
                             st.error(error_msg)
-                        st.stop()
+                        return
 
                     # Show warnings (non-blocking)
                     if has_warnings(validation_results):
@@ -1228,7 +1756,9 @@ def render_add_card_section():
                         # Rerun to refresh all tabs (Dashboard will now show the new card)
                         st.rerun()
                     except StorageError as e:
-                        st.error(f"Failed: {e}")
+                        st.error("Couldn't save your card. Please try again.")
+                    except Exception as e:
+                        st.error("Something went wrong. Please try again in a moment.")
 
     st.divider()
 
@@ -1289,7 +1819,8 @@ def render_add_card_section():
             sheet_url = st.text_input(
                 "Google Sheets URL:",
                 placeholder="https://docs.google.com/spreadsheets/d/...",
-                key="import_sheet_url"
+                key="import_sheet_url",
+                max_chars=2000
             )
             if sheet_url and st.button("Fetch from Google Sheets", key="import_fetch_sheets"):
                 try:
@@ -1357,7 +1888,8 @@ def render_add_card_section():
                 "Paste your spreadsheet data:",
                 height=200,
                 placeholder="Paste your spreadsheet data here...\nInclude column headers in the first row.",
-                key="import_text_area"
+                key="import_text_area",
+                max_chars=50000
             )
 
         # Parse and preview
@@ -1533,7 +2065,8 @@ def render_add_card_section():
                     "URL",
                     placeholder="https://www.uscreditcardguide.com/...",
                     label_visibility="collapsed",
-                    key="extract_url_input"
+                    key="extract_url_input",
+                    max_chars=2000
                 )
             with url_col2:
                 extract_url_btn = st.button("Extract", type="secondary", use_container_width=True, key="extract_url_btn")
@@ -1555,6 +2088,7 @@ def render_add_card_section():
                 height=150,
                 placeholder="Paste card terms, benefits page content, or any text about the card...",
                 key="extract_text_input",
+                max_chars=50000
             )
 
             if st.button("Extract", key="extract_text_btn", type="secondary", disabled=len(raw_text) < 50):
@@ -1612,7 +2146,7 @@ def render_extraction_result():
     save_col1, save_col2, save_col3 = st.columns([2, 2, 1])
 
     with save_col1:
-        ext_nickname = st.text_input("Nickname", key="ext_nickname", placeholder="Optional")
+        ext_nickname = st.text_input("Nickname", key="ext_nickname", placeholder="Optional", max_chars=100)
 
     with save_col2:
         ext_opened_date = st.date_input("Opened Date", value=None, key="ext_opened_date")
@@ -1633,11 +2167,12 @@ def render_extraction_result():
                     ext_opened_date
                 ))
 
-            # Show errors (blocking)
+            # Show errors (blocking) — use return instead of st.stop()
+            # to avoid halting all page rendering (which breaks tab navigation)
             if has_errors(validation_results):
                 for error_msg in get_error_messages(validation_results):
                     st.error(error_msg)
-                st.stop()
+                return
 
             # Show warnings (non-blocking)
             if has_warnings(validation_results):
@@ -1659,7 +2194,9 @@ def render_extraction_result():
                 # Rerun to refresh all tabs (Dashboard will now show the new card)
                 st.rerun()
             except StorageError as e:
-                st.error(f"Failed: {e}")
+                st.error("Couldn't save your card. Please try again.")
+            except Exception as e:
+                st.error("Something went wrong. Please try again in a moment.")
 
     if st.button("Discard", key="discard_extracted"):
         st.session_state.last_extraction = None
@@ -1680,6 +2217,7 @@ def render_card_edit_form(card, editing_key: str):
                 value=card.nickname or "",
                 key=f"edit_nickname_{card.id}",
                 placeholder="e.g., P2's Card",
+                max_chars=100
             )
 
             new_opened_date = st.date_input(
@@ -1708,6 +2246,7 @@ def render_card_edit_form(card, editing_key: str):
             value=card.notes or "",
             key=f"edit_notes_{card.id}",
             height=100,
+            max_chars=5000
         )
 
         # SUB tracking fields (only show if card has SUB)
@@ -1723,7 +2262,8 @@ def render_card_edit_form(card, editing_key: str):
                 value=card.signup_bonus.points_or_cash,
                 key=f"edit_sub_reward_{card.id}",
                 placeholder="e.g., 80,000 MR points, $500 cash, 1 free night",
-                help="What you'll earn when you complete the spending requirement"
+                help="What you'll earn when you complete the spending requirement",
+                max_chars=200
             )
 
             sub_col1, sub_col2 = st.columns(2)
@@ -1767,6 +2307,7 @@ def render_card_edit_form(card, editing_key: str):
                     "Offer Details",
                     placeholder="e.g., 20,000 points after $2,000 spend in 3 months",
                     key=f"ret_offer_{card.id}",
+                    max_chars=1000
                 )
             with ret_col2:
                 ret_accepted = st.checkbox(
@@ -1778,6 +2319,7 @@ def render_card_edit_form(card, editing_key: str):
                     "Notes (optional)",
                     placeholder="e.g., Called before AF posted",
                     key=f"ret_notes_{card.id}",
+                    max_chars=1000
                 )
 
             if st.button("Add Offer", key=f"add_retention_{card.id}"):
@@ -1820,13 +2362,15 @@ def render_card_edit_form(card, editing_key: str):
                     "From Product",
                     value=card.name,
                     key=f"pc_from_{card.id}",
-                    help="Original card name (pre-filled with current card)"
+                    help="Original card name (pre-filled with current card)",
+                    max_chars=200
                 )
                 pc_to = st.text_input(
                     "To Product",
                     placeholder="e.g., Chase Freedom Unlimited",
                     key=f"pc_to_{card.id}",
-                    help="New card name after product change"
+                    help="New card name after product change",
+                    max_chars=200
                 )
             with pc_col2:
                 pc_reason = st.selectbox(
@@ -1838,6 +2382,7 @@ def render_card_edit_form(card, editing_key: str):
                     "Notes (optional)",
                     placeholder="e.g., Called retention line first",
                     key=f"pc_notes_{card.id}",
+                    max_chars=1000
                 )
 
             if st.button("Add Product Change", key=f"add_pc_{card.id}"):
@@ -1865,13 +2410,15 @@ def render_card_edit_form(card, editing_key: str):
                 # Validate inputs before saving
                 validation_results = []
                 validation_results.append(validate_opened_date(new_opened_date))
-                validation_results.append(validate_opened_date(new_af_date))  # Annual fee date should also not be in past inappropriately
+                # Note: Annual fee due date is intentionally NOT validated with validate_opened_date
+                # because AF dates should be in the future (that's when the next fee is due)
 
-                # Show errors (blocking)
+                # Show errors (blocking) — use return instead of st.stop()
+                # to avoid halting all page rendering (which breaks tab navigation)
                 if has_errors(validation_results):
                     for error_msg in get_error_messages(validation_results):
                         st.error(error_msg)
-                    st.stop()
+                    return
 
                 # Show warnings (non-blocking)
                 if has_warnings(validation_results):
@@ -1913,8 +2460,13 @@ def render_card_edit_form(card, editing_key: str):
                         updates["sub_achieved"] = new_sub_achieved
 
                 if updates:
-                    st.session_state.storage.update_card(card.id, updates)
-                    st.success("✓ Changes saved!")
+                    try:
+                        st.session_state.storage.update_card(card.id, updates)
+                        st.success("✓ Changes saved!")
+                    except StorageError as e:
+                        st.error("Couldn't save your changes. Please try again.")
+                    except Exception as e:
+                        st.error("Something went wrong. Please try again in a moment.")
                 else:
                     st.info("No changes to save")
 
@@ -2310,6 +2862,7 @@ def render_card_item(card, show_issuer_header: bool = True, selection_mode: bool
 def go_to_add_card():
     """Navigate to the Add Card tab."""
     st.session_state.navigate_to_add_card = True
+    st.rerun()
 
 
 def render_empty_dashboard():
@@ -2627,6 +3180,7 @@ def render_dashboard():
             placeholder="Search by name or nickname...",
             key="search_query",
             label_visibility="collapsed",
+            max_chars=200
         )
 
     # Apply filters
@@ -3072,6 +3626,59 @@ def render_five_twenty_four_tab():
         )
 
 
+def show_legal_page(page_type):
+    """Display Privacy Policy or Terms of Service without requiring authentication.
+    
+    Args:
+        page_type: "privacy" or "terms"
+    """
+    # Read the markdown file
+    pages_dir = Path(__file__).parent.parent.parent / "pages"
+    if page_type == "privacy":
+        file_path = pages_dir / "privacy_policy.md"
+        title = "Privacy Policy"
+    else:  # terms
+        file_path = pages_dir / "terms_of_service.md"
+        title = "Terms of Service"
+    
+    try:
+        with open(file_path, 'r') as f:
+            content = f.read()
+        
+        # Display with ChurnPilot branding
+        st.markdown("""
+        <div style="text-align: center; margin-bottom: 32px;">
+            <div style="font-size: 3rem; margin-bottom: 8px;">💳</div>
+            <h1 style="margin: 0;">ChurnPilot</h1>
+            <p style="color: #64748b; margin-top: 4px;">Credit Card Intelligence</p>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        # Display the content
+        st.markdown(content)
+        
+        # Navigation footer
+        st.divider()
+        col1, col2, col3 = st.columns([1, 1, 1])
+        with col1:
+            if st.button("← Back to App", use_container_width=True):
+                st.query_params.clear()
+                st.rerun()
+        with col2:
+            if page_type == "privacy":
+                if st.button("Terms of Service →", use_container_width=True):
+                    st.query_params["page"] = "terms"
+                    st.rerun()
+            else:
+                if st.button("Privacy Policy →", use_container_width=True):
+                    st.query_params["page"] = "privacy"
+                    st.rerun()
+        
+    except FileNotFoundError:
+        st.error(f"Legal document not found: {file_path}")
+        st.info("Please contact support at hendrix.ai.dev@gmail.com")
+
+
 def main():
     """Main application entry point."""
     st.set_page_config(
@@ -3085,6 +3692,12 @@ def main():
     st.markdown(CUSTOM_CSS, unsafe_allow_html=True)
     st.markdown(COMPONENT_CSS, unsafe_allow_html=True)
 
+    # Check for legal page requests (public, no auth required)
+    legal_page = st.query_params.get("page")
+    if legal_page in ("privacy", "terms"):
+        show_legal_page(legal_page)
+        return
+
     # Try to restore session from browser storage (persists across page refresh)
     # This runs on every page load - if session token is found and valid,
     # it restores user_id and user_email to session state
@@ -3093,14 +3706,23 @@ def main():
     # Auth check - show login if not authenticated
     if "user_id" not in st.session_state:
         show_auth_page()
+        # Show cookie consent banner on auth page too
+        render_cookie_consent_banner()
         return
 
     # User is authenticated - show user menu
     show_user_menu()
+    
+    # Show cookie consent banner if not yet accepted
+    render_cookie_consent_banner()
 
     # Initialize storage with user's ID
-    storage = DatabaseStorage(UUID(st.session_state.user_id))
-    st.session_state.storage = storage
+    try:
+        storage = DatabaseStorage(UUID(st.session_state.user_id))
+        st.session_state.storage = storage
+    except Exception as e:
+        st.error("Something went wrong. Please try again in a moment.")
+        return
 
     init_session_state()
 
@@ -3171,15 +3793,19 @@ def main():
     tab1, tab2, tab3, tab4 = st.tabs(["Dashboard", "Action Required", "Add Card", "5/24 Tracker"])
 
     with tab1:
+        st.session_state.current_tab = "Dashboard"
         render_dashboard()
 
     with tab2:
+        st.session_state.current_tab = "Action Required"
         render_action_required_tab()
 
     with tab3:
+        st.session_state.current_tab = "Add Card"
         render_add_card_section()
 
     with tab4:
+        st.session_state.current_tab = "5/24 Tracker"
         render_five_twenty_four_tab()
 
 

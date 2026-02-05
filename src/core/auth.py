@@ -262,6 +262,128 @@ class AuthService:
                 (str(user_id),)
             )
             return cursor.rowcount > 0
+    
+    def delete_account(self, user_id: UUID) -> bool:
+        """Delete user account and ALL associated data.
+        
+        This permanently deletes:
+        - All cards and related data (signup bonuses, credits, credit usage, 
+          retention offers, product changes)
+        - User preferences
+        - All sessions
+        - Feedback submitted by this user
+        - The user account itself
+        
+        Args:
+            user_id: User's UUID.
+            
+        Returns:
+            True if account deleted successfully.
+        """
+        with get_cursor() as cursor:
+            try:
+                # Get user's email for feedback deletion
+                cursor.execute(
+                    "SELECT email FROM users WHERE id = %s",
+                    (str(user_id),)
+                )
+                row = cursor.fetchone()
+                if not row:
+                    return False
+                
+                user_email = row["email"]
+                
+                # Delete in order to respect foreign key constraints
+                # 1. Delete all card-related data first
+                cursor.execute(
+                    """
+                    DELETE FROM credit_usage 
+                    WHERE card_id IN (
+                        SELECT id FROM cards WHERE user_id = %s
+                    )
+                    """,
+                    (str(user_id),)
+                )
+                
+                cursor.execute(
+                    """
+                    DELETE FROM retention_offers 
+                    WHERE card_id IN (
+                        SELECT id FROM cards WHERE user_id = %s
+                    )
+                    """,
+                    (str(user_id),)
+                )
+                
+                cursor.execute(
+                    """
+                    DELETE FROM product_changes 
+                    WHERE card_id IN (
+                        SELECT id FROM cards WHERE user_id = %s
+                    )
+                    """,
+                    (str(user_id),)
+                )
+                
+                cursor.execute(
+                    """
+                    DELETE FROM signup_bonuses 
+                    WHERE card_id IN (
+                        SELECT id FROM cards WHERE user_id = %s
+                    )
+                    """,
+                    (str(user_id),)
+                )
+                
+                cursor.execute(
+                    """
+                    DELETE FROM card_credits 
+                    WHERE card_id IN (
+                        SELECT id FROM cards WHERE user_id = %s
+                    )
+                    """,
+                    (str(user_id),)
+                )
+                
+                # 2. Delete cards
+                cursor.execute(
+                    "DELETE FROM cards WHERE user_id = %s",
+                    (str(user_id),)
+                )
+                
+                # 3. Delete user preferences
+                cursor.execute(
+                    "DELETE FROM user_preferences WHERE user_id = %s",
+                    (str(user_id),)
+                )
+                
+                # 4. Delete all sessions (CASCADE handles this, but explicit is better)
+                cursor.execute(
+                    "DELETE FROM sessions WHERE user_id = %s",
+                    (str(user_id),)
+                )
+                
+                # 5. Delete feedback (if table exists)
+                try:
+                    cursor.execute(
+                        "DELETE FROM churnpilot_feedback WHERE user_email = %s",
+                        (user_email,)
+                    )
+                except Exception:
+                    # Table might not exist, continue
+                    pass
+                
+                # 6. Finally delete the user
+                cursor.execute(
+                    "DELETE FROM users WHERE id = %s",
+                    (str(user_id),)
+                )
+                
+                return cursor.rowcount > 0
+                
+            except Exception:
+                # Transaction will be rolled back automatically
+                raise
 
     def create_session(self, user_id: UUID) -> str:
         """Create a new session for a user.

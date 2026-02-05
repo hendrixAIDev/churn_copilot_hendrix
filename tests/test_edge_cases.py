@@ -383,3 +383,144 @@ class TestDateEdgeCases:
 
         reloaded = user_storage.get_all_cards()[0]
         assert reloaded.closed_date == closed
+
+
+class TestInputLengthValidation:
+    """Test input length validation function."""
+
+    def test_validate_text_length_under_limit(self):
+        """Should pass when text is under limit."""
+        from src.core.validation import validate_text_length
+
+        result = validate_text_length("short text", "Field", 100)
+        assert result == "ok"
+
+    def test_validate_text_length_at_limit(self):
+        """Should pass when text is exactly at limit."""
+        from src.core.validation import validate_text_length
+
+        text = "A" * 100
+        result = validate_text_length(text, "Field", 100)
+        assert result == "ok"
+
+    def test_validate_text_length_over_limit(self):
+        """Should fail when text exceeds limit."""
+        from src.core.validation import validate_text_length, ValidationError
+
+        text = "A" * 101
+        result = validate_text_length(text, "Field", 100)
+        assert isinstance(result, ValidationError)
+        assert "too long" in str(result)
+        assert "101/100" in str(result)
+
+    def test_validate_text_length_none(self):
+        """Should pass when text is None."""
+        from src.core.validation import validate_text_length
+
+        result = validate_text_length(None, "Field", 100)
+        assert result == "ok"
+
+    def test_validate_text_length_empty(self):
+        """Should pass when text is empty string."""
+        from src.core.validation import validate_text_length
+
+        result = validate_text_length("", "Field", 100)
+        assert result == "ok"
+
+    def test_validate_email_max_length(self):
+        """Email should not exceed 254 characters."""
+        from src.core.validation import validate_text_length, ValidationError
+
+        # Valid email under limit
+        email = "user@example.com"
+        result = validate_text_length(email, "Email", 254)
+        assert result == "ok"
+
+        # Email over limit
+        long_email = "a" * 250 + "@example.com"  # ~262 chars
+        result = validate_text_length(long_email, "Email", 254)
+        assert isinstance(result, ValidationError)
+
+    def test_validate_password_max_length(self):
+        """Password should not exceed 128 characters."""
+        from src.core.validation import validate_text_length, ValidationError
+
+        # Valid password under limit
+        password = "A" * 128
+        result = validate_text_length(password, "Password", 128)
+        assert result == "ok"
+
+        # Password over limit
+        long_password = "A" * 129
+        result = validate_text_length(long_password, "Password", 128)
+        assert isinstance(result, ValidationError)
+
+    def test_validate_nickname_max_length(self):
+        """Card nickname should not exceed 100 characters."""
+        from src.core.validation import validate_text_length, ValidationError
+
+        # Valid nickname under limit
+        nickname = "My Card " * 10  # ~70 chars
+        result = validate_text_length(nickname, "Nickname", 100)
+        assert result == "ok"
+
+        # Nickname over limit
+        long_nickname = "A" * 101
+        result = validate_text_length(long_nickname, "Nickname", 100)
+        assert isinstance(result, ValidationError)
+
+    def test_validate_notes_max_length(self):
+        """Notes should not exceed 5000 characters."""
+        from src.core.validation import validate_text_length, ValidationError
+
+        # Valid notes under limit
+        notes = "A" * 5000
+        result = validate_text_length(notes, "Notes", 5000)
+        assert result == "ok"
+
+        # Notes over limit
+        long_notes = "A" * 5001
+        result = validate_text_length(long_notes, "Notes", 5000)
+        assert isinstance(result, ValidationError)
+
+    def test_validate_feedback_max_length(self):
+        """Feedback message should not exceed 10000 characters."""
+        from src.core.validation import validate_text_length, ValidationError
+
+        # Valid feedback under limit
+        feedback = "A" * 10000
+        result = validate_text_length(feedback, "Feedback", 10000)
+        assert result == "ok"
+
+        # Feedback over limit
+        long_feedback = "A" * 10001
+        result = validate_text_length(long_feedback, "Feedback", 10000)
+        assert isinstance(result, ValidationError)
+
+    def test_validate_url_max_length(self):
+        """URL should not exceed 2000 characters."""
+        from src.core.validation import validate_text_length, ValidationError
+
+        # Valid URL under limit
+        url = "https://example.com/" + "a" * 1980
+        result = validate_text_length(url, "URL", 2000)
+        assert result == "ok"
+
+        # URL over limit
+        long_url = "https://example.com/" + "a" * 1985
+        result = validate_text_length(long_url, "URL", 2000)
+        assert isinstance(result, ValidationError)
+
+    def test_validate_extraction_text_max_length(self):
+        """Card extraction text should not exceed 50000 characters."""
+        from src.core.validation import validate_text_length, ValidationError
+
+        # Valid extraction text under limit
+        text = "A" * 50000
+        result = validate_text_length(text, "Extraction Text", 50000)
+        assert result == "ok"
+
+        # Extraction text over limit
+        long_text = "A" * 50001
+        result = validate_text_length(long_text, "Extraction Text", 50000)
+        assert isinstance(result, ValidationError)

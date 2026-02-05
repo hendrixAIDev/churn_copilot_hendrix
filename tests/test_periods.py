@@ -275,5 +275,188 @@ class TestSnoozeCredits:
         assert result["Saks Credit"].reminder_snoozed_until == date(2024, 2, 1)
 
 
+class TestBenefitAutoReset:
+    """Tests for automatic benefit reset when periods change (Issue #25)."""
+
+    def test_monthly_benefit_resets_next_month(self):
+        """Monthly benefit marked used in January should reset in February."""
+        from unittest.mock import patch
+
+        credit_usage = {}
+
+        # Mark credit as used on Jan 15
+        with patch('src.core.periods.date') as mock_date:
+            mock_date.today.return_value = date(2024, 1, 15)
+            credit_usage = mark_credit_used("Uber Credit", "monthly", credit_usage)
+
+            # Verify it's used in January
+            assert is_credit_used_this_period("Uber Credit", "monthly", credit_usage) is True
+
+        # Check in February - should NOT be used
+        with patch('src.core.periods.date') as mock_date:
+            mock_date.today.return_value = date(2024, 2, 1)
+            assert is_credit_used_this_period("Uber Credit", "monthly", credit_usage) is False
+
+    def test_quarterly_benefit_resets_next_quarter(self):
+        """Quarterly benefit used in Q1 should reset in Q2."""
+        from unittest.mock import patch
+
+        credit_usage = {}
+
+        # Mark credit as used in Q1 (March 15)
+        with patch('src.core.periods.date') as mock_date:
+            mock_date.today.return_value = date(2024, 3, 15)
+            credit_usage = mark_credit_used("Saks Credit", "quarterly", credit_usage)
+
+            # Verify it's used in Q1
+            assert is_credit_used_this_period("Saks Credit", "quarterly", credit_usage) is True
+
+        # Check in Q2 (April 1) - should NOT be used
+        with patch('src.core.periods.date') as mock_date:
+            mock_date.today.return_value = date(2024, 4, 1)
+            assert is_credit_used_this_period("Saks Credit", "quarterly", credit_usage) is False
+
+    def test_semi_annual_benefit_resets_next_half(self):
+        """Semi-annual benefit used in H1 should reset in H2."""
+        from unittest.mock import patch
+
+        credit_usage = {}
+
+        # Mark credit as used in H1 (June 15)
+        with patch('src.core.periods.date') as mock_date:
+            mock_date.today.return_value = date(2024, 6, 15)
+            credit_usage = mark_credit_used("Dell Credit", "semi-annually", credit_usage)
+
+            # Verify it's used in H1
+            assert is_credit_used_this_period("Dell Credit", "semi-annually", credit_usage) is True
+
+        # Check in H2 (July 1) - should NOT be used
+        with patch('src.core.periods.date') as mock_date:
+            mock_date.today.return_value = date(2024, 7, 1)
+            assert is_credit_used_this_period("Dell Credit", "semi-annually", credit_usage) is False
+
+    def test_annual_benefit_resets_next_year(self):
+        """Annual benefit used in 2025 should reset in 2026."""
+        from unittest.mock import patch
+
+        credit_usage = {}
+
+        # Mark credit as used in 2025 (June 15)
+        with patch('src.core.periods.date') as mock_date:
+            mock_date.today.return_value = date(2025, 6, 15)
+            credit_usage = mark_credit_used("Airline Credit", "annual", credit_usage)
+
+            # Verify it's used in 2025
+            assert is_credit_used_this_period("Airline Credit", "annual", credit_usage) is True
+
+        # Check in 2026 (January 1) - should NOT be used
+        with patch('src.core.periods.date') as mock_date:
+            mock_date.today.return_value = date(2026, 1, 1)
+            assert is_credit_used_this_period("Airline Credit", "annual", credit_usage) is False
+
+    def test_benefit_does_not_reset_within_same_period_monthly(self):
+        """Monthly benefit used Jan 15 should still be used Jan 31."""
+        from unittest.mock import patch
+
+        credit_usage = {}
+
+        # Mark credit as used on Jan 15
+        with patch('src.core.periods.date') as mock_date:
+            mock_date.today.return_value = date(2024, 1, 15)
+            credit_usage = mark_credit_used("Uber Credit", "monthly", credit_usage)
+
+        # Check on Jan 31 - should STILL be used
+        with patch('src.core.periods.date') as mock_date:
+            mock_date.today.return_value = date(2024, 1, 31)
+            assert is_credit_used_this_period("Uber Credit", "monthly", credit_usage) is True
+
+    def test_benefit_does_not_reset_within_same_period_quarterly(self):
+        """Quarterly benefit used in January should still be used in March (same Q1)."""
+        from unittest.mock import patch
+
+        credit_usage = {}
+
+        # Mark credit as used in January (Q1)
+        with patch('src.core.periods.date') as mock_date:
+            mock_date.today.return_value = date(2024, 1, 15)
+            credit_usage = mark_credit_used("Saks Credit", "quarterly", credit_usage)
+
+        # Check in March (still Q1) - should STILL be used
+        with patch('src.core.periods.date') as mock_date:
+            mock_date.today.return_value = date(2024, 3, 31)
+            assert is_credit_used_this_period("Saks Credit", "quarterly", credit_usage) is True
+
+    def test_benefit_does_not_reset_within_same_period_semi_annual(self):
+        """Semi-annual benefit used in January should still be used in June (same H1)."""
+        from unittest.mock import patch
+
+        credit_usage = {}
+
+        # Mark credit as used in January (H1)
+        with patch('src.core.periods.date') as mock_date:
+            mock_date.today.return_value = date(2024, 1, 15)
+            credit_usage = mark_credit_used("Dell Credit", "semi-annually", credit_usage)
+
+        # Check in June (still H1) - should STILL be used
+        with patch('src.core.periods.date') as mock_date:
+            mock_date.today.return_value = date(2024, 6, 30)
+            assert is_credit_used_this_period("Dell Credit", "semi-annually", credit_usage) is True
+
+    def test_benefit_does_not_reset_within_same_period_annual(self):
+        """Annual benefit used in February should still be used in December (same year)."""
+        from unittest.mock import patch
+
+        credit_usage = {}
+
+        # Mark credit as used in February
+        with patch('src.core.periods.date') as mock_date:
+            mock_date.today.return_value = date(2025, 2, 15)
+            credit_usage = mark_credit_used("Airline Credit", "annual", credit_usage)
+
+        # Check in December (same year) - should STILL be used
+        with patch('src.core.periods.date') as mock_date:
+            mock_date.today.return_value = date(2025, 12, 31)
+            assert is_credit_used_this_period("Airline Credit", "annual", credit_usage) is True
+
+    def test_multiple_benefits_different_frequencies(self):
+        """Multiple benefits with different frequencies should reset independently."""
+        from unittest.mock import patch
+
+        credit_usage = {}
+
+        # Mark all credits as used on Jan 15, 2024
+        with patch('src.core.periods.date') as mock_date:
+            mock_date.today.return_value = date(2024, 1, 15)
+            credit_usage = mark_credit_used("Monthly Credit", "monthly", credit_usage)
+            credit_usage = mark_credit_used("Quarterly Credit", "quarterly", credit_usage)
+            credit_usage = mark_credit_used("Annual Credit", "annual", credit_usage)
+
+            # All used on Jan 15
+            assert is_credit_used_this_period("Monthly Credit", "monthly", credit_usage) is True
+            assert is_credit_used_this_period("Quarterly Credit", "quarterly", credit_usage) is True
+            assert is_credit_used_this_period("Annual Credit", "annual", credit_usage) is True
+
+        # Check on Feb 1 - only monthly should reset
+        with patch('src.core.periods.date') as mock_date:
+            mock_date.today.return_value = date(2024, 2, 1)
+            assert is_credit_used_this_period("Monthly Credit", "monthly", credit_usage) is False
+            assert is_credit_used_this_period("Quarterly Credit", "quarterly", credit_usage) is True
+            assert is_credit_used_this_period("Annual Credit", "annual", credit_usage) is True
+
+        # Check on April 1 (Q2) - monthly and quarterly should reset
+        with patch('src.core.periods.date') as mock_date:
+            mock_date.today.return_value = date(2024, 4, 1)
+            assert is_credit_used_this_period("Monthly Credit", "monthly", credit_usage) is False
+            assert is_credit_used_this_period("Quarterly Credit", "quarterly", credit_usage) is False
+            assert is_credit_used_this_period("Annual Credit", "annual", credit_usage) is True
+
+        # Check on Jan 1, 2025 - all should reset
+        with patch('src.core.periods.date') as mock_date:
+            mock_date.today.return_value = date(2025, 1, 1)
+            assert is_credit_used_this_period("Monthly Credit", "monthly", credit_usage) is False
+            assert is_credit_used_this_period("Quarterly Credit", "quarterly", credit_usage) is False
+            assert is_credit_used_this_period("Annual Credit", "annual", credit_usage) is False
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

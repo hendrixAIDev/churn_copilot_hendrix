@@ -3,11 +3,6 @@
 import pytest
 from datetime import datetime, date
 from unittest.mock import patch, MagicMock
-import os
-
-# Ensure DATABASE_URL is set for tests
-os.environ.setdefault("DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/churnpilot")
-
 import psycopg2
 from src.core.database import get_cursor, check_connection, get_connection
 from src.core.db_storage import DatabaseStorage
@@ -266,3 +261,249 @@ class TestDatabaseOperationsUnderLoad:
         assert len(cards2) == 2
         assert all(c.nickname != "User 2 Card" for c in cards1)
         assert all(c.nickname != "User 1 Card" for c in cards2)
+
+
+class TestNetworkErrorHandling:
+    """Test graceful handling of database connection failures (Issue #38)."""
+
+    def test_get_all_cards_handles_connection_error(self):
+        """get_all_cards should handle connection errors gracefully."""
+        from unittest.mock import patch, MagicMock
+
+        auth = AuthService()
+        email = f"conn_err_{datetime.now().timestamp()}@test.com"
+        user = auth.register(email, "TestPassword123!")
+        storage = DatabaseStorage(user.id)
+
+        # Mock get_cursor to raise a connection error
+        with patch('src.core.db_storage.get_cursor') as mock_cursor:
+            mock_cursor.side_effect = psycopg2.OperationalError("Connection refused")
+
+            # Should raise an exception (not crash silently)
+            with pytest.raises(psycopg2.OperationalError):
+                storage.get_all_cards()
+
+    def test_add_card_handles_connection_error(self):
+        """add_card should handle connection errors gracefully."""
+        from unittest.mock import patch
+
+        auth = AuthService()
+        email = f"add_err_{datetime.now().timestamp()}@test.com"
+        user = auth.register(email, "TestPassword123!")
+        storage = DatabaseStorage(user.id)
+
+        # Mock get_cursor to raise a connection error
+        with patch('src.core.db_storage.get_cursor') as mock_cursor:
+            mock_cursor.side_effect = psycopg2.OperationalError("Network timeout")
+
+            template = get_template("chase_sapphire_preferred")
+            # Should raise an exception
+            with pytest.raises(psycopg2.OperationalError):
+                storage.add_card_from_template(template)
+
+    def test_update_card_handles_connection_error(self):
+        """update_card should handle connection errors gracefully."""
+        from unittest.mock import patch
+
+        auth = AuthService()
+        email = f"upd_err_{datetime.now().timestamp()}@test.com"
+        user = auth.register(email, "TestPassword123!")
+        storage = DatabaseStorage(user.id)
+
+        # First add a card successfully
+        card = add_card_helper(storage, "chase_sapphire_preferred")
+        card_id = card.id
+
+        # Mock get_cursor to raise a connection error on update
+        with patch('src.core.db_storage.get_cursor') as mock_cursor:
+            mock_cursor.side_effect = psycopg2.OperationalError("Connection lost")
+
+            # Should raise an exception
+            with pytest.raises(psycopg2.OperationalError):
+                storage.update_card(card_id, {"nickname": "Updated Card"})
+
+    def test_delete_card_handles_connection_error(self):
+        """delete_card should handle connection errors gracefully."""
+        from unittest.mock import patch
+
+        auth = AuthService()
+        email = f"del_err_{datetime.now().timestamp()}@test.com"
+        user = auth.register(email, "TestPassword123!")
+        storage = DatabaseStorage(user.id)
+
+        # First add a card successfully
+        card = add_card_helper(storage, "chase_sapphire_preferred")
+        card_id = card.id
+
+        # Mock get_cursor to raise a connection error on delete
+        with patch('src.core.db_storage.get_cursor') as mock_cursor:
+            mock_cursor.side_effect = psycopg2.OperationalError("Database unreachable")
+
+            # Should raise an exception
+            with pytest.raises(psycopg2.OperationalError):
+                storage.delete_card(card_id)
+
+    def test_save_card_handles_connection_error(self):
+        """save_card should handle connection errors gracefully."""
+        from unittest.mock import patch
+
+        auth = AuthService()
+        email = f"save_err_{datetime.now().timestamp()}@test.com"
+        user = auth.register(email, "TestPassword123!")
+        storage = DatabaseStorage(user.id)
+
+        # First add a card successfully
+        card = add_card_helper(storage, "chase_sapphire_preferred")
+
+        # Modify the card
+        card.nickname = "Modified Card"
+
+        # Mock get_cursor to raise a connection error on save
+        with patch('src.core.db_storage.get_cursor') as mock_cursor:
+            mock_cursor.side_effect = psycopg2.OperationalError("Connection timeout")
+
+            # Should raise an exception
+            with pytest.raises(psycopg2.OperationalError):
+                storage.save_card(card)
+
+    def test_get_preferences_handles_connection_error(self):
+        """get_preferences should handle connection errors gracefully."""
+        from unittest.mock import patch
+
+        auth = AuthService()
+        email = f"pref_err_{datetime.now().timestamp()}@test.com"
+        user = auth.register(email, "TestPassword123!")
+        storage = DatabaseStorage(user.id)
+
+        # Mock get_cursor to raise a connection error
+        with patch('src.core.db_storage.get_cursor') as mock_cursor:
+            mock_cursor.side_effect = psycopg2.OperationalError("Connection error")
+
+            # Should raise an exception
+            with pytest.raises(psycopg2.OperationalError):
+                storage.get_preferences()
+
+    def test_save_preferences_handles_connection_error(self):
+        """save_preferences should handle connection errors gracefully."""
+        from unittest.mock import patch
+        from src.core.preferences import UserPreferences
+
+        auth = AuthService()
+        email = f"save_pref_err_{datetime.now().timestamp()}@test.com"
+        user = auth.register(email, "TestPassword123!")
+        storage = DatabaseStorage(user.id)
+
+        prefs = UserPreferences(sort_by="name", sort_descending=True)
+
+        # Mock get_cursor to raise a connection error
+        with patch('src.core.db_storage.get_cursor') as mock_cursor:
+            mock_cursor.side_effect = psycopg2.OperationalError("Database error")
+
+            # Should raise an exception
+            with pytest.raises(psycopg2.OperationalError):
+                storage.save_preferences(prefs)
+
+    def test_auth_handles_connection_error(self):
+        """Auth operations should handle connection errors gracefully."""
+        from unittest.mock import patch
+
+        auth = AuthService()
+
+        # Mock get_connection (deeper in the stack) to raise a connection error
+        with patch('src.core.database.get_connection') as mock_conn:
+            mock_conn.side_effect = psycopg2.OperationalError("Cannot connect to database")
+
+            # Should raise an exception (not crash)
+            with pytest.raises(psycopg2.OperationalError):
+                auth.register(f"new_user_{datetime.now().timestamp()}@test.com", "TestPassword123!")
+
+    def test_intermittent_connection_failure_recovery(self):
+        """System should recover from intermittent connection failures."""
+        from unittest.mock import patch, MagicMock
+        import itertools
+
+        auth = AuthService()
+        email = f"intermit_{datetime.now().timestamp()}@test.com"
+        user = auth.register(email, "TestPassword123!")
+        storage = DatabaseStorage(user.id)
+
+        # Add a card successfully
+        card = add_card_helper(storage, "chase_sapphire_preferred")
+        card_id = card.id
+
+        # Simulate intermittent failure: fail once, then succeed
+        call_count = itertools.count()
+
+        def intermittent_failure(*args, **kwargs):
+            if next(call_count) == 0:
+                raise psycopg2.OperationalError("Temporary connection issue")
+            # Second call succeeds - use the real function
+            from src.core.database import get_cursor as real_get_cursor
+            return real_get_cursor(*args, **kwargs)
+
+        # First call fails
+        with patch('src.core.db_storage.get_cursor', side_effect=intermittent_failure):
+            with pytest.raises(psycopg2.OperationalError):
+                storage.get_all_cards()
+
+        # Second call succeeds (no patch - normal operation)
+        cards = storage.get_all_cards()
+        assert len(cards) == 1
+        assert cards[0].id == card_id
+
+    def test_connection_error_does_not_corrupt_data(self):
+        """Connection errors should not leave data in inconsistent state."""
+        from unittest.mock import patch
+
+        auth = AuthService()
+        email = f"corrupt_check_{datetime.now().timestamp()}@test.com"
+        user = auth.register(email, "TestPassword123!")
+        storage = DatabaseStorage(user.id)
+
+        # Add a card successfully
+        card = add_card_helper(storage, "chase_sapphire_preferred")
+        original_nickname = card.nickname
+
+        # Try to update with connection error
+        card.nickname = "This Should Not Save"
+
+        with patch('src.core.db_storage.get_cursor') as mock_cursor:
+            mock_cursor.side_effect = psycopg2.OperationalError("Connection error during save")
+
+            with pytest.raises(psycopg2.OperationalError):
+                storage.save_card(card)
+
+        # Reload card - should have original data
+        cards = storage.get_all_cards()
+        assert len(cards) == 1
+        assert cards[0].nickname == original_nickname
+
+    def test_multiple_concurrent_connection_errors(self):
+        """Multiple operations failing simultaneously should not cause cascade issues."""
+        from unittest.mock import patch
+
+        auth = AuthService()
+        users = []
+
+        # Create multiple users
+        for i in range(3):
+            email = f"concurrent_err_{i}_{datetime.now().timestamp()}@test.com"
+            user = auth.register(email, "TestPassword123!")
+            users.append(user)
+
+        # Mock connection failure
+        with patch('src.core.db_storage.get_cursor') as mock_cursor:
+            mock_cursor.side_effect = psycopg2.OperationalError("Network partition")
+
+            # All operations should fail gracefully
+            for user in users:
+                storage = DatabaseStorage(user.id)
+                with pytest.raises(psycopg2.OperationalError):
+                    storage.get_all_cards()
+
+        # After "network recovery", operations should work
+        for user in users:
+            storage = DatabaseStorage(user.id)
+            cards = storage.get_all_cards()
+            # Should return empty list (or existing cards if any)
+            assert isinstance(cards, list)

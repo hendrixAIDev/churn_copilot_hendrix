@@ -34,7 +34,8 @@ def validate_opened_date(opened_date: date | None) -> ValidationResult:
     """Validate card opened date.
 
     Args:
-        opened_date: The date the card was opened.
+        opened_date: The date the card was opened. Optional — cards without
+            opened dates are valid but won't count toward 5/24 tracking.
 
     Returns:
         ValidationResult indicating if date is valid.
@@ -167,6 +168,29 @@ def validate_card_name(name: str, existing_names: list[str]) -> ValidationResult
             f"Consider using a nickname to distinguish them (e.g., 'P2's card')."
         )
 
+    return "ok"
+
+
+def validate_text_length(text: str | None, field_name: str, max_length: int) -> ValidationResult:
+    """Validate text length against maximum.
+
+    Args:
+        text: The text to validate (can be None).
+        field_name: Name of the field for error messages.
+        max_length: Maximum allowed length in characters.
+
+    Returns:
+        ValidationResult indicating if text length is valid.
+    """
+    if text is None or len(text) == 0:
+        return "ok"
+    
+    if len(text) > max_length:
+        return ValidationError(
+            f"{field_name} is too long ({len(text)}/{max_length} chars). "
+            f"Please shorten your input."
+        )
+    
     return "ok"
 
 
