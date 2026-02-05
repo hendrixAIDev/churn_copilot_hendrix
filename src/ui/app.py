@@ -4,7 +4,6 @@ import streamlit as st
 from datetime import date, datetime, timedelta
 import sys
 import os
-import psycopg2
 from pathlib import Path
 # Session persistence via query params.
 # Query params persist across:
@@ -668,6 +667,11 @@ from src.core.rate_limit import (
     check_feedback_rate_limit,
     record_feedback_submission,
 )
+from src.core.ai_rate_limit import (
+    check_extraction_limit,
+    get_extraction_count,
+    FREE_TIER_MONTHLY_LIMIT,
+)
 from extra_streamlit_components import CookieManager
 
 # Cookie key for session token (survives browser close, unlike query params)
@@ -1177,36 +1181,18 @@ def submit_feedback(feedback_type: str, message: str, page: str = None, user_age
         True if successful, False otherwise
     """
     try:
-        # Get database connection from env
-        db_url = os.getenv("DATABASE_URL")
-        if not db_url:
-            # Try to load from .env file if not in environment
-            from dotenv import load_dotenv
-            env_path = Path(__file__).parent.parent.parent / ".env"
-            load_dotenv(env_path)
-            db_url = os.getenv("DATABASE_URL")
-        
-        if not db_url:
-            st.error("Database connection not configured")
-            return False
-        
-        # Connect and insert
-        conn = psycopg2.connect(db_url)
-        cursor = conn.cursor()
+        from ..core.database import get_cursor
         
         user_email = st.session_state.get("user_email")
         
-        cursor.execute(
-            """
-            INSERT INTO churnpilot_feedback (user_email, feedback_type, message, page, user_agent)
-            VALUES (%s, %s, %s, %s, %s)
-            """,
-            (user_email, feedback_type, message, page, user_agent)
-        )
-        
-        conn.commit()
-        cursor.close()
-        conn.close()
+        with get_cursor() as cursor:
+            cursor.execute(
+                """
+                INSERT INTO churnpilot_feedback (user_email, feedback_type, message, page, user_agent)
+                VALUES (%s, %s, %s, %s, %s)
+                """,
+                (user_email, feedback_type, message, page, user_agent)
+            )
         
         return True
         
@@ -1934,6 +1920,15 @@ def render_add_card_section():
         Perfect for quickly adding cards that aren't in our library yet.
         """)
 
+        # Show AI extraction usage status
+        user_id = UUID(st.session_state.user_id)
+        can_extract, remaining, rate_limit_message = check_extraction_limit(user_id)
+        
+        if can_extract:
+            st.info(f"🤖 **{remaining}/{FREE_TIER_MONTHLY_LIMIT} AI extractions remaining this month**")
+        else:
+            st.warning(f"⚠️ {rate_limit_message}")
+
         st.divider()
 
         tab1, tab2 = st.tabs(["From URL", "From Text"])
@@ -1955,10 +1950,12 @@ def render_add_card_section():
             if extract_url_btn and url_input:
                 with st.spinner("Extracting card details from URL..."):
                     try:
-                        card_data = extract_from_url(url_input)
+                        user_id = UUID(st.session_state.user_id)
+                        card_data = extract_from_url(url_input, user_id=user_id)
                         st.session_state.last_extraction = card_data
                         st.session_state.source_url = url_input
                         st.success(f"Extracted: {card_data.name}")
+                        st.rerun()  # Refresh to update remaining count
                     except (FetchError, ExtractionError) as e:
                         st.error(f"Failed: {e}")
 
@@ -1975,10 +1972,12 @@ def render_add_card_section():
             if st.button("Extract", key="extract_text_btn", type="secondary", disabled=len(raw_text) < 50):
                 with st.spinner("Extracting card details from text..."):
                     try:
-                        card_data = extract_from_text(raw_text)
+                        user_id = UUID(st.session_state.user_id)
+                        card_data = extract_from_text(raw_text, user_id=user_id)
                         st.session_state.last_extraction = card_data
                         st.session_state.source_url = None
                         st.success(f"Extracted: {card_data.name}")
+                        st.rerun()  # Refresh to update remaining count
                     except ExtractionError as e:
                         st.error(f"Failed: {e}")
 

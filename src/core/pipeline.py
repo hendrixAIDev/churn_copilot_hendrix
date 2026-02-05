@@ -12,6 +12,8 @@ import json
 import os
 import re
 from pathlib import Path
+from uuid import UUID
+from typing import Optional
 
 from dotenv import load_dotenv
 
@@ -19,6 +21,7 @@ from .models import CardData, SignupBonus, Credit
 from .exceptions import ExtractionError
 from .fetcher import fetch_card_page
 from .enrichment import enrich_card_data, get_enrichment_summary
+from .ai_rate_limit import check_extraction_limit, record_extraction
 
 # Load environment variables
 load_dotenv(Path(__file__).parent.parent.parent / ".env")
@@ -82,31 +85,43 @@ Content to analyze:
 Respond with JSON only:"""
 
 
-def extract_from_url(url: str, timeout: int = 60) -> CardData:
+def extract_from_url(url: str, timeout: int = 60, user_id: Optional[UUID] = None) -> CardData:
     """Extract structured card data from a URL using Jina + Claude pipeline.
 
     This is the main entry point for the extraction pipeline:
-    1. URL -> Jina Reader (fetches clean Markdown via fetcher module)
-    2. Markdown -> Claude (extracts structured data)
-    3. CardData -> Auto-enrichment (adds missing credits from library)
-    4. JSON -> CardData (validates and returns)
+    1. Rate limit check (if user_id provided)
+    2. URL -> Jina Reader (fetches clean Markdown via fetcher module)
+    3. Markdown -> Claude (extracts structured data)
+    4. CardData -> Auto-enrichment (adds missing credits from library)
+    5. JSON -> CardData (validates and returns)
 
     Args:
         url: URL to extract card data from (must be from allowed domains).
         timeout: HTTP request timeout in seconds.
+        user_id: User UUID for rate limiting. If None, rate limiting is skipped.
 
     Returns:
         CardData object with extracted and auto-enriched fields.
 
     Raises:
         FetchError: If URL fetch fails or domain not allowed.
-        ExtractionError: If AI extraction fails.
+        ExtractionError: If AI extraction fails or rate limit exceeded.
     """
+    # Step 0: Check rate limit (if user_id provided)
+    if user_id:
+        can_extract, remaining, message = check_extraction_limit(user_id)
+        if not can_extract:
+            raise ExtractionError(message)
+    
     # Step 1: Fetch clean Markdown via Jina Reader (with domain validation)
     markdown_content = fetch_card_page(url, timeout)
 
     # Step 2: Extract structured data via Claude
     card_data = _extract_with_claude(markdown_content)
+    
+    # Step 2.5: Record extraction (if user_id provided)
+    if user_id:
+        record_extraction(user_id)
 
     # Step 3: Auto-enrich with library data (adds missing credits)
     enriched_data, match_result = enrich_card_data(card_data, min_confidence=0.7)
@@ -290,25 +305,36 @@ def _parse_to_card_data(data: dict) -> CardData:
     )
 
 
-def extract_from_text(text: str) -> CardData:
+def extract_from_text(text: str, user_id: Optional[UUID] = None) -> CardData:
     """Extract structured card data from raw text using Claude.
 
     Use this when you already have the content (e.g., pasted text).
 
     Args:
         text: Raw text content to analyze.
+        user_id: User UUID for rate limiting. If None, rate limiting is skipped.
 
     Returns:
         CardData object with extracted and auto-enriched fields.
 
     Raises:
-        ExtractionError: If extraction fails.
+        ExtractionError: If extraction fails or rate limit exceeded.
     """
     if not text or not text.strip():
         raise ExtractionError("Empty text provided")
 
+    # Check rate limit (if user_id provided)
+    if user_id:
+        can_extract, remaining, message = check_extraction_limit(user_id)
+        if not can_extract:
+            raise ExtractionError(message)
+
     # Extract data via Claude
     card_data = _extract_with_claude(text)
+    
+    # Record extraction (if user_id provided)
+    if user_id:
+        record_extraction(user_id)
 
     # Auto-enrich with library data (adds missing credits)
     enriched_data, match_result = enrich_card_data(card_data, min_confidence=0.7)

@@ -1,11 +1,17 @@
 """Database connection and schema management for ChurnPilot."""
 
 import os
+import logging
 from contextlib import contextmanager
 from typing import Generator
 
 import psycopg2
 from psycopg2.extras import RealDictCursor
+from psycopg2.pool import PoolError
+
+from .db_pool import get_connection_pool
+
+logger = logging.getLogger(__name__)
 
 
 def get_database_url() -> str:
@@ -159,21 +165,63 @@ def get_schema_sql() -> str:
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
     CREATE INDEX IF NOT EXISTS idx_product_changes_card_id ON product_changes(card_id);
+
+    -- AI extraction tracking (for cost control)
+    CREATE TABLE IF NOT EXISTS ai_extractions (
+        user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        month_key VARCHAR(7) NOT NULL,  -- Format: "YYYY-MM"
+        extraction_count INTEGER DEFAULT 0,
+        last_extracted_at TIMESTAMP,
+        PRIMARY KEY (user_id, month_key)
+    );
+    CREATE INDEX IF NOT EXISTS idx_ai_extractions_user_id ON ai_extractions(user_id);
+    CREATE INDEX IF NOT EXISTS idx_ai_extractions_month_key ON ai_extractions(month_key);
     """
 
 
 @contextmanager
 def get_connection() -> Generator[psycopg2.extensions.connection, None, None]:
-    """Get a database connection.
+    """Get a database connection from the pool.
+    
+    Automatically returns the connection to the pool on exit.
+    Handles pool exhaustion gracefully with retries and clear error messages.
 
     Yields:
-        Database connection (auto-closed on exit).
+        Database connection (auto-returned to pool on exit).
+        
+    Raises:
+        PoolError: If unable to get connection from pool after retries.
     """
-    conn = psycopg2.connect(get_database_url())
+    pool = get_connection_pool(get_database_url())
+    conn = None
+    max_retries = 3
+    retry_count = 0
+    
+    while retry_count < max_retries:
+        try:
+            conn = pool.getconn()
+            break
+        except PoolError as e:
+            retry_count += 1
+            logger.warning(f"Pool exhausted (attempt {retry_count}/{max_retries}): {e}")
+            if retry_count >= max_retries:
+                logger.error("Failed to get connection from pool after retries")
+                raise PoolError(
+                    f"Connection pool exhausted. All {pool.maxconn} connections are in use. "
+                    "This may indicate a connection leak or excessive concurrent usage."
+                ) from e
+            # Brief pause before retry (exponential backoff)
+            import time
+            time.sleep(0.1 * (2 ** retry_count))
+    
     try:
         yield conn
     finally:
-        conn.close()
+        if conn is not None:
+            try:
+                pool.putconn(conn)
+            except Exception as e:
+                logger.error(f"Error returning connection to pool: {e}")
 
 
 @contextmanager
@@ -220,3 +268,34 @@ def check_connection() -> bool:
             return True
     except Exception:
         return False
+
+
+def get_pool_health() -> dict:
+    """Get connection pool health statistics.
+    
+    Returns:
+        Dictionary with pool health information including:
+        - connections_in_use: Number of connections currently in use
+        - connections_available: Number of connections available
+        - total_connections: Total connections in pool
+        - minconn: Minimum connections configured
+        - maxconn: Maximum connections configured
+        - pool_exhausted: Boolean indicating if pool is at capacity
+    """
+    try:
+        pool = get_connection_pool(get_database_url())
+        from .db_pool import get_pool_stats
+        stats = get_pool_stats(pool)
+        
+        # Add derived health metrics
+        if "connections_in_use" in stats and "maxconn" in stats:
+            stats["pool_exhausted"] = stats["connections_in_use"] >= stats["maxconn"]
+            stats["utilization_percent"] = (
+                (stats["connections_in_use"] / stats["maxconn"] * 100)
+                if stats["maxconn"] > 0 else 0
+            )
+        
+        return stats
+    except Exception as e:
+        logger.error(f"Failed to get pool health: {e}")
+        return {"error": str(e)}

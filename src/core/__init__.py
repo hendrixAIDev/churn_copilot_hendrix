@@ -45,6 +45,13 @@ from .enrichment import (
     BatchEnrichmentResult,
 )
 from .demo import get_demo_cards, get_demo_summary
+from .ai_rate_limit import (
+    check_extraction_limit,
+    record_extraction,
+    get_extraction_count,
+    get_extraction_history,
+    FREE_TIER_MONTHLY_LIMIT,
+)
 
 __all__ = [
     # Models
@@ -120,4 +127,10 @@ __all__ = [
     # Demo
     "get_demo_cards",
     "get_demo_summary",
+    # AI rate limiting
+    "check_extraction_limit",
+    "record_extraction",
+    "get_extraction_count",
+    "get_extraction_history",
+    "FREE_TIER_MONTHLY_LIMIT",
 ]
