@@ -27,50 +27,51 @@ SESSION_QUERY_PARAM = "s"
 # Custom CSS for cleaner UI — ChurnPilot Design System v2
 CUSTOM_CSS = """
 <style>
-    /* ===== GLOBAL DESIGN TOKENS — LIGHT MODE ===== */
+    /* ===== GLOBAL DESIGN TOKENS — DARK MODE DEFAULT ===== */
+    /* Streamlit config.toml sets base="dark", so dark is the default */
     :root {
         --cp-primary: #6366f1;
         --cp-primary-light: #818cf8;
         --cp-primary-dark: #4f46e5;
-        --cp-primary-bg: #eef2ff;
+        --cp-primary-bg: rgba(99, 102, 241, 0.2);
         --cp-success: #10b981;
         --cp-success-light: #34d399;
-        --cp-success-bg: #ecfdf5;
-        --cp-success-text: #065f46;
+        --cp-success-bg: rgba(16, 185, 129, 0.15);
+        --cp-success-text: #34d399;
         --cp-warning: #f59e0b;
         --cp-warning-light: #fbbf24;
-        --cp-warning-bg: #fffbeb;
-        --cp-warning-text: #92400e;
+        --cp-warning-bg: rgba(245, 158, 11, 0.15);
+        --cp-warning-text: #fbbf24;
         --cp-danger: #ef4444;
         --cp-danger-light: #f87171;
-        --cp-danger-bg: #fef2f2;
-        --cp-danger-text: #991b1b;
+        --cp-danger-bg: rgba(239, 68, 68, 0.15);
+        --cp-danger-text: #fca5a5;
         --cp-info: #3b82f6;
-        --cp-info-bg: #eff6ff;
-        --cp-info-text: #3730a3;
-        --cp-text: #1a1a2e;
-        --cp-text-secondary: #64748b;
-        --cp-text-muted: #94a3b8;
-        --cp-text-on-surface: #1a1a2e;
-        --cp-surface: #ffffff;
-        --cp-surface-raised: #f8fafc;
-        --cp-surface-overlay: #f1f5f9;
-        --cp-bg: #fafbfc;
-        --cp-border: #e2e8f0;
-        --cp-border-light: #f1f5f9;
-        --cp-fee-free: #059669;
-        --cp-reward-label: #4f46e5;
-        --cp-reward-value: #1e1b4b;
-        --cp-sub-earned-label: #065f46;
-        --cp-sub-earned-value: #064e3b;
-        --cp-annual-value: #3730a3;
+        --cp-info-bg: rgba(59, 130, 246, 0.15);
+        --cp-info-text: #a5b4fc;
+        --cp-text: #e2e8f0;
+        --cp-text-secondary: #94a3b8;
+        --cp-text-muted: #64748b;
+        --cp-text-on-surface: #e2e8f0;
+        --cp-surface: #1e293b;
+        --cp-surface-raised: #334155;
+        --cp-surface-overlay: #2d3748;
+        --cp-bg: #0f172a;
+        --cp-border: #475569;
+        --cp-border-light: #334155;
+        --cp-fee-free: #34d399;
+        --cp-reward-label: #a5b4fc;
+        --cp-reward-value: #e0e7ff;
+        --cp-sub-earned-label: #34d399;
+        --cp-sub-earned-value: #a7f3d0;
+        --cp-annual-value: #a5b4fc;
         --cp-radius-sm: 8px;
         --cp-radius-md: 12px;
         --cp-radius-lg: 16px;
         --cp-radius-xl: 20px;
-        --cp-shadow-sm: 0 1px 3px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.06);
-        --cp-shadow-md: 0 4px 6px -1px rgba(0,0,0,0.07), 0 2px 4px -2px rgba(0,0,0,0.05);
-        --cp-shadow-lg: 0 10px 15px -3px rgba(0,0,0,0.08), 0 4px 6px -4px rgba(0,0,0,0.04);
+        --cp-shadow-sm: 0 1px 3px rgba(0,0,0,0.2), 0 1px 2px rgba(0,0,0,0.3);
+        --cp-shadow-md: 0 4px 6px -1px rgba(0,0,0,0.3), 0 2px 4px -2px rgba(0,0,0,0.2);
+        --cp-shadow-lg: 0 10px 15px -3px rgba(0,0,0,0.3), 0 4px 6px -4px rgba(0,0,0,0.2);
         --cp-transition: 0.2s cubic-bezier(0.4, 0, 0.2, 1);
     }
 
@@ -476,299 +477,89 @@ CUSTOM_CSS = """
         gap: 12px;
     }
 
-    /* ===== DARK MODE ===== */
-    @media (prefers-color-scheme: dark) {
-        :root {
-            --cp-text: #e2e8f0;
-            --cp-text-secondary: #94a3b8;
-            --cp-text-muted: #64748b;
-            --cp-text-on-surface: #e2e8f0;
-            --cp-surface: #1e293b;
-            --cp-surface-raised: #334155;
-            --cp-surface-overlay: #2d3748;
-            --cp-bg: #0f172a;
-            --cp-border: #475569;
-            --cp-border-light: #334155;
-            --cp-primary-bg: rgba(99, 102, 241, 0.2);
-            --cp-success-bg: rgba(16, 185, 129, 0.15);
-            --cp-success-text: #34d399;
-            --cp-warning-bg: rgba(245, 158, 11, 0.15);
-            --cp-warning-text: #fbbf24;
-            --cp-danger-bg: rgba(239, 68, 68, 0.15);
-            --cp-danger-text: #fca5a5;
-            --cp-info-text: #a5b4fc;
-            --cp-info-bg: rgba(59, 130, 246, 0.15);
-            --cp-fee-free: #34d399;
-            --cp-reward-label: #a5b4fc;
-            --cp-reward-value: #e0e7ff;
-            --cp-sub-earned-label: #34d399;
-            --cp-sub-earned-value: #a7f3d0;
-            --cp-annual-value: #a5b4fc;
-            --cp-shadow-sm: 0 1px 3px rgba(0,0,0,0.2), 0 1px 2px rgba(0,0,0,0.3);
-            --cp-shadow-md: 0 4px 6px -1px rgba(0,0,0,0.3), 0 2px 4px -2px rgba(0,0,0,0.2);
-            --cp-shadow-lg: 0 10px 15px -3px rgba(0,0,0,0.3), 0 4px 6px -4px rgba(0,0,0,0.2);
-        }
+    /* ===== DARK MODE ENHANCEMENTS ===== */
+    /* Since base="dark" in config.toml, Streamlit handles native elements.
+       We just need to ensure our custom elements match. No @media needed. */
+    /* (CSS variables already set to dark values in :root above) */
 
-        /* ---- Global ---- */
-        .stApp {
-            background: var(--cp-bg) !important;
-            color: var(--cp-text) !important;
-        }
-        section[data-testid="stMain"] {
-            background: var(--cp-bg) !important;
-        }
+    /* Force dark backgrounds on all native Streamlit elements that might resist */
+    .stApp {
+        background: var(--cp-bg) !important;
+        color: var(--cp-text) !important;
+    }
+    section[data-testid="stMain"] {
+        background: var(--cp-bg) !important;
+    }
 
-        /* ---- Typography ---- */
-        h1, h2, h3, h4, h5, h6 {
-            color: var(--cp-text) !important;
-        }
-        p, span, div, li, td, th, label {
-            color: var(--cp-text);
-        }
+    /* ---- Typography (dark) ---- */
+    h1, h2, h3, h4, h5, h6 {
+        color: var(--cp-text) !important;
+    }
 
-        /* ---- Card containers ---- */
-        .card-container {
-            background: var(--cp-surface) !important;
-            border-color: var(--cp-border) !important;
-            color: var(--cp-text) !important;
-        }
+    /* ---- ALL Buttons — dark theme fix (critical) ---- */
+    .stButton > button {
+        background: var(--cp-surface) !important;
+        color: var(--cp-text) !important;
+        border-color: var(--cp-border) !important;
+    }
+    .stButton > button:hover {
+        background: var(--cp-surface-raised) !important;
+        border-color: var(--cp-primary-light) !important;
+    }
+    .stButton > button[kind="primary"],
+    .stButton > button[data-testid="stBaseButton-primary"] {
+        background: linear-gradient(135deg, var(--cp-primary) 0%, var(--cp-primary-dark) 100%) !important;
+        color: white !important;
+        border: none !important;
+    }
 
-        /* ---- Auth container ---- */
-        .auth-container {
-            background: var(--cp-surface) !important;
-            border-color: var(--cp-border) !important;
-        }
-        .auth-logo h1 {
-            background: linear-gradient(135deg, var(--cp-primary-light) 0%, #a78bfa 100%) !important;
-            -webkit-background-clip: text !important;
-            -webkit-text-fill-color: transparent !important;
-        }
-        .auth-tagline {
-            color: var(--cp-text-secondary) !important;
-        }
+    /* ---- Metrics ---- */
+    [data-testid="stMetricValue"] {
+        color: var(--cp-text) !important;
+    }
+    [data-testid="stMetricLabel"] {
+        color: var(--cp-text-secondary) !important;
+    }
 
-        /* ---- Summary cards ---- */
-        .summary-card {
-            background: var(--cp-surface) !important;
-            border-color: var(--cp-border) !important;
-            color: var(--cp-text) !important;
-        }
-        .summary-value {
-            color: var(--cp-text) !important;
-        }
+    /* ---- Markdown container ---- */
+    [data-testid="stMarkdownContainer"] {
+        color: var(--cp-text) !important;
+    }
+    [data-testid="stMarkdownContainer"] p,
+    [data-testid="stMarkdownContainer"] span,
+    [data-testid="stMarkdownContainer"] div {
+        color: inherit !important;
+    }
 
-        /* ---- Metrics ---- */
-        [data-testid="stMetric"] {
-            background: var(--cp-surface) !important;
-            border-color: var(--cp-border) !important;
-        }
-        [data-testid="stMetricValue"] {
-            color: var(--cp-text) !important;
-        }
-        [data-testid="stMetricLabel"] {
-            color: var(--cp-text-secondary) !important;
-        }
+    /* ---- Alerts ---- */
+    [data-testid="stAlert"] p,
+    [data-testid="stAlert"] span {
+        color: var(--cp-text) !important;
+    }
 
-        /* ---- Forms ---- */
-        [data-testid="stForm"] {
-            background: var(--cp-surface) !important;
-            border-color: var(--cp-border) !important;
-        }
+    /* ---- Download button ---- */
+    .stDownloadButton > button {
+        background: var(--cp-surface) !important;
+        color: var(--cp-text) !important;
+        border-color: var(--cp-border) !important;
+    }
 
-        /* ---- Inputs ---- */
-        .stTextInput > div > div > input,
-        .stTextArea > div > div > textarea,
-        .stNumberInput > div > div > input,
-        .stSelectbox > div > div,
-        .stMultiSelect > div > div,
-        .stDateInput > div > div > input {
-            background: var(--cp-surface-raised) !important;
-            color: var(--cp-text) !important;
-            border-color: var(--cp-border) !important;
-        }
-        .stTextInput > label,
-        .stTextArea > label,
-        .stNumberInput > label,
-        .stSelectbox > label,
-        .stMultiSelect > label,
-        .stDateInput > label,
-        .stCheckbox label {
-            color: var(--cp-text-secondary) !important;
-        }
+    /* ---- Selectbox / Dropdown ---- */
+    [data-baseweb="select"] > div {
+        background: var(--cp-surface) !important;
+        color: var(--cp-text) !important;
+    }
+    [data-baseweb="menu"] {
+        background: var(--cp-surface) !important;
+    }
+    [data-baseweb="menu"] li {
+        color: var(--cp-text) !important;
+    }
 
-        /* ---- ALL Buttons (critical fix) ---- */
-        .stButton > button {
-            background: var(--cp-surface) !important;
-            color: var(--cp-text) !important;
-            border-color: var(--cp-border) !important;
-        }
-        .stButton > button:hover {
-            background: var(--cp-surface-raised) !important;
-            border-color: var(--cp-primary-light) !important;
-        }
-        /* Keep primary buttons vibrant */
-        .stButton > button[kind="primary"],
-        .stButton > button[data-testid="stBaseButton-primary"] {
-            background: linear-gradient(135deg, var(--cp-primary) 0%, var(--cp-primary-dark) 100%) !important;
-            color: white !important;
-            border: none !important;
-        }
-
-        /* ---- Tabs ---- */
-        .stTabs [data-baseweb="tab-list"] {
-            background: var(--cp-surface) !important;
-            border-color: var(--cp-border) !important;
-        }
-        .stTabs [data-baseweb="tab"] {
-            color: var(--cp-text-secondary) !important;
-        }
-        .stTabs [data-baseweb="tab"]:hover {
-            background: var(--cp-primary-bg) !important;
-            color: var(--cp-primary-light) !important;
-        }
-
-        /* ---- Expanders ---- */
-        [data-testid="stExpander"] {
-            background: var(--cp-surface) !important;
-            border-color: var(--cp-border) !important;
-        }
-        [data-testid="stExpander"] summary,
-        [data-testid="stExpander"] summary span {
-            color: var(--cp-text) !important;
-        }
-
-        /* ---- Benefit items ---- */
-        .benefit-item {
-            background: var(--cp-surface-raised) !important;
-            border-left-color: var(--cp-border) !important;
-            color: var(--cp-text) !important;
-        }
-        .benefit-item:hover {
-            background: var(--cp-surface-overlay) !important;
-        }
-        .benefit-item.used {
-            background: var(--cp-success-bg) !important;
-            border-left-color: var(--cp-success) !important;
-            color: var(--cp-success-text) !important;
-        }
-        .benefit-item.unused {
-            background: var(--cp-warning-bg) !important;
-            border-left-color: var(--cp-warning) !important;
-            color: var(--cp-warning-text) !important;
-        }
-
-        /* ---- Status badges ---- */
-        .badge-warning {
-            background: var(--cp-warning-bg) !important;
-            color: var(--cp-warning-text) !important;
-            border-color: rgba(245, 158, 11, 0.3) !important;
-        }
-        .badge-success {
-            background: var(--cp-success-bg) !important;
-            color: var(--cp-success-text) !important;
-            border-color: rgba(16, 185, 129, 0.3) !important;
-        }
-        .badge-danger {
-            background: var(--cp-danger-bg) !important;
-            color: var(--cp-danger-text) !important;
-            border-color: rgba(239, 68, 68, 0.3) !important;
-        }
-        .badge-info {
-            background: var(--cp-primary-bg) !important;
-            color: var(--cp-info-text) !important;
-            border-color: rgba(99, 102, 241, 0.3) !important;
-        }
-        .badge-muted {
-            background: var(--cp-surface-raised) !important;
-            color: var(--cp-text-secondary) !important;
-            border-color: var(--cp-border) !important;
-        }
-
-        /* ---- Alerts ---- */
-        [data-testid="stAlert"] {
-            background: var(--cp-surface) !important;
-            border-color: var(--cp-border) !important;
-            color: var(--cp-text) !important;
-        }
-        [data-testid="stAlert"] p,
-        [data-testid="stAlert"] span {
-            color: var(--cp-text) !important;
-        }
-
-        /* ---- Download button ---- */
-        .stDownloadButton > button {
-            background: var(--cp-surface) !important;
-            color: var(--cp-text) !important;
-            border-color: var(--cp-border) !important;
-        }
-
-        /* ---- Scrollbar ---- */
-        ::-webkit-scrollbar-thumb {
-            background: #475569;
-        }
-        ::-webkit-scrollbar-thumb:hover {
-            background: #64748b;
-        }
-
-        /* ---- Demo banner ---- */
-        .demo-banner {
-            background: var(--cp-primary-bg) !important;
-            border-color: rgba(99, 102, 241, 0.3) !important;
-        }
-
-        /* ---- Dividers ---- */
-        hr {
-            border-color: var(--cp-border) !important;
-        }
-
-        /* ---- Progress bar ---- */
-        .benefits-progress {
-            background: var(--cp-surface-raised) !important;
-        }
-
-        /* ---- Selectbox / Dropdown styling ---- */
-        [data-baseweb="select"] > div,
-        [data-baseweb="popover"] > div {
-            background: var(--cp-surface) !important;
-            color: var(--cp-text) !important;
-        }
-        [data-baseweb="menu"] {
-            background: var(--cp-surface) !important;
-        }
-        [data-baseweb="menu"] li {
-            color: var(--cp-text) !important;
-        }
-        [data-baseweb="menu"] li:hover {
-            background: var(--cp-surface-raised) !important;
-        }
-
-        /* ---- Checkbox ---- */
-        .stCheckbox label span {
-            color: var(--cp-text) !important;
-        }
-
-        /* ---- Caption / small text ---- */
-        [data-testid="stCaptionContainer"],
-        .stCaption {
-            color: var(--cp-text-muted) !important;
-        }
-
-        /* ---- Markdown content (inline-styled elements) ---- */
-        [data-testid="stMarkdownContainer"] {
-            color: var(--cp-text) !important;
-        }
-
-        /* ---- Sidebar (keep existing dark gradient) ---- */
-        [data-testid="stSidebar"] {
-            /* Already dark — no override needed */
-        }
-
-        /* ---- Action Required items / 5-24 items ---- */
-        .cp-action-item, .cp-tracker-item {
-            background: var(--cp-surface) !important;
-            border-color: var(--cp-border) !important;
-            color: var(--cp-text) !important;
-        }
+    /* ---- Caption ---- */
+    [data-testid="stCaptionContainer"],
+    .stCaption {
+        color: var(--cp-text-muted) !important;
     }
     
     /* ===== COOKIE CONSENT BANNER ===== */
