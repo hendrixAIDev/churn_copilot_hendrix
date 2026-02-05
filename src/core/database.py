@@ -7,9 +7,6 @@ from typing import Generator
 
 import psycopg2
 from psycopg2.extras import RealDictCursor
-from psycopg2.pool import PoolError
-
-from .db_pool import get_connection_pool
 
 logger = logging.getLogger(__name__)
 
@@ -182,56 +179,27 @@ def get_schema_sql() -> str:
 
 @contextmanager
 def get_connection() -> Generator[psycopg2.extensions.connection, None, None]:
-    """Get a database connection from the pool.
+    """Get a direct database connection.
     
-    Automatically returns the connection to the pool on exit.
-    Handles pool exhaustion gracefully with retries and clear error messages.
+    Creates a new connection for each request.
+    Automatically closes the connection on exit.
 
     Yields:
-        Database connection (auto-returned to pool on exit).
+        Database connection (auto-closed on exit).
         
     Raises:
-        PoolError: If unable to get connection from pool after retries.
-        RuntimeError: If connection pool could not be created.
+        psycopg2.Error: If unable to connect to database.
     """
-    pool = get_connection_pool(get_database_url())
-    
-    # If pool creation failed, raise a clear error
-    if pool is None:
-        raise RuntimeError(
-            "Failed to create database connection pool. "
-            "Check that DATABASE_URL is properly configured in Streamlit secrets."
-        )
-    
     conn = None
-    max_retries = 3
-    retry_count = 0
-    
-    while retry_count < max_retries:
-        try:
-            conn = pool.getconn()
-            break
-        except PoolError as e:
-            retry_count += 1
-            logger.warning(f"Pool exhausted (attempt {retry_count}/{max_retries}): {e}")
-            if retry_count >= max_retries:
-                logger.error("Failed to get connection from pool after retries")
-                raise PoolError(
-                    f"Connection pool exhausted. All {pool.maxconn} connections are in use. "
-                    "This may indicate a connection leak or excessive concurrent usage."
-                ) from e
-            # Brief pause before retry (exponential backoff)
-            import time
-            time.sleep(0.1 * (2 ** retry_count))
-    
     try:
+        conn = psycopg2.connect(get_database_url())
         yield conn
     finally:
         if conn is not None:
             try:
-                pool.putconn(conn)
+                conn.close()
             except Exception as e:
-                logger.error(f"Error returning connection to pool: {e}")
+                logger.error(f"Error closing connection: {e}")
 
 
 @contextmanager
@@ -280,32 +248,5 @@ def check_connection() -> bool:
         return False
 
 
-def get_pool_health() -> dict:
-    """Get connection pool health statistics.
-    
-    Returns:
-        Dictionary with pool health information including:
-        - connections_in_use: Number of connections currently in use
-        - connections_available: Number of connections available
-        - total_connections: Total connections in pool
-        - minconn: Minimum connections configured
-        - maxconn: Maximum connections configured
-        - pool_exhausted: Boolean indicating if pool is at capacity
-    """
-    try:
-        pool = get_connection_pool(get_database_url())
-        from .db_pool import get_pool_stats
-        stats = get_pool_stats(pool)
-        
-        # Add derived health metrics
-        if "connections_in_use" in stats and "maxconn" in stats:
-            stats["pool_exhausted"] = stats["connections_in_use"] >= stats["maxconn"]
-            stats["utilization_percent"] = (
-                (stats["connections_in_use"] / stats["maxconn"] * 100)
-                if stats["maxconn"] > 0 else 0
-            )
-        
-        return stats
-    except Exception as e:
-        logger.error(f"Failed to get pool health: {e}")
-        return {"error": str(e)}
+# Connection pooling removed due to Streamlit Cloud initialization issues
+# Will be re-implemented with better compatibility later
