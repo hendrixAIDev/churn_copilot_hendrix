@@ -26,8 +26,11 @@ from .ai_rate_limit import check_extraction_limit, record_extraction
 # Load environment variables
 load_dotenv(Path(__file__).parent.parent.parent / ".env")
 
-# Claude model for extraction (configurable via env var)
-EXTRACTION_MODEL = os.getenv("EXTRACTION_MODEL", "claude-sonnet-4-20250514")
+# AI model selection (configurable via env var)
+# Options: "gemini" (free, default), "claude" (paid but higher quality)
+AI_PROVIDER = os.getenv("AI_PROVIDER", "gemini")
+CLAUDE_MODEL = os.getenv("CLAUDE_MODEL", "claude-sonnet-4-20250514")
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
 
 # System prompt - Claude acts as a Credit Card Data Analyst
 SYSTEM_PROMPT = """You are a Credit Card Data Analyst specializing in extracting structured information from credit card marketing materials and reviews.
@@ -116,8 +119,8 @@ def extract_from_url(url: str, timeout: int = 60, user_id: Optional[UUID] = None
     # Step 1: Fetch clean Markdown via Jina Reader (with domain validation)
     markdown_content = fetch_card_page(url, timeout)
 
-    # Step 2: Extract structured data via Claude
-    card_data = _extract_with_claude(markdown_content)
+    # Step 2: Extract structured data via AI (Gemini default, Claude fallback)
+    card_data = _extract_with_ai(markdown_content)
     
     # Step 2.5: Record extraction (if user_id provided)
     if user_id:
@@ -132,6 +135,99 @@ def extract_from_url(url: str, timeout: int = 60, user_id: Optional[UUID] = None
         print(f"[Enrichment] {summary}")
 
     return enriched_data
+
+
+def _extract_with_ai(content: str, max_content_chars: int = 15000) -> CardData:
+    """Extract structured card data using the configured AI provider.
+    
+    Uses Gemini by default (free tier), falls back to Claude if Gemini fails.
+    
+    Args:
+        content: Clean Markdown content from Jina Reader.
+        max_content_chars: Maximum content length to send.
+        
+    Returns:
+        CardData object with extracted fields.
+        
+    Raises:
+        ExtractionError: If extraction fails.
+    """
+    provider = AI_PROVIDER.lower()
+    
+    if provider == "gemini":
+        try:
+            return _extract_with_gemini(content, max_content_chars)
+        except ExtractionError as e:
+            # If Gemini fails (quota, etc.), fall back to Claude
+            import logging
+            logging.warning(f"Gemini extraction failed: {e}, falling back to Claude")
+            return _extract_with_claude(content, max_content_chars)
+    else:
+        return _extract_with_claude(content, max_content_chars)
+
+
+def _extract_with_gemini(content: str, max_content_chars: int = 15000) -> CardData:
+    """Extract structured card data from Markdown using Gemini.
+    
+    Args:
+        content: Clean Markdown content from Jina Reader.
+        max_content_chars: Maximum content length to send.
+        
+    Returns:
+        CardData object with extracted fields.
+        
+    Raises:
+        ExtractionError: If extraction fails.
+    """
+    # Get API key
+    api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
+    
+    if not api_key:
+        try:
+            import streamlit as st
+            api_key = st.secrets.get("GEMINI_API_KEY") or st.secrets.get("GOOGLE_API_KEY")
+        except:
+            pass
+    
+    if not api_key:
+        raise ExtractionError("GEMINI_API_KEY not found in environment or Streamlit secrets")
+    
+    # Truncate content if too long
+    if len(content) > max_content_chars:
+        content = content[:max_content_chars] + "\n\n[Content truncated...]"
+    
+    # Lazy import Google GenAI SDK
+    try:
+        from google import genai
+    except ImportError:
+        raise ExtractionError("google-genai package not installed")
+    
+    client = genai.Client(api_key=api_key)
+    
+    # Combine system prompt and user prompt for Gemini
+    full_prompt = f"{SYSTEM_PROMPT}\n\n{EXTRACTION_PROMPT.format(content=content)}"
+    
+    try:
+        response = client.models.generate_content(
+            model=GEMINI_MODEL,
+            contents=full_prompt
+        )
+        
+        response_text = response.text.strip()
+        
+        # Extract JSON from response
+        json_str = _extract_json_from_response(response_text)
+        data = json.loads(json_str)
+        
+        return _parse_to_card_data(data)
+        
+    except json.JSONDecodeError as e:
+        raise ExtractionError("Unable to understand the card information. The page might not contain clear card details.")
+    except Exception as e:
+        import logging
+        logging.error(f"Gemini extraction failed: {e}")
+        # Re-raise as ExtractionError so caller can handle fallback
+        raise ExtractionError(f"Gemini extraction failed: {str(e)[:100]}")
 
 
 def _extract_with_claude(content: str, max_content_chars: int = 15000) -> CardData:
@@ -170,7 +266,7 @@ def _extract_with_claude(content: str, max_content_chars: int = 15000) -> CardDa
 
     try:
         response = client.messages.create(
-            model=EXTRACTION_MODEL,
+            model=CLAUDE_MODEL,
             max_tokens=2048,
             system=SYSTEM_PROMPT,
             messages=[
@@ -332,8 +428,8 @@ def extract_from_text(text: str, user_id: Optional[UUID] = None) -> CardData:
         if not can_extract:
             raise ExtractionError(message)
 
-    # Extract data via Claude
-    card_data = _extract_with_claude(text)
+    # Extract data via AI (Gemini default, Claude fallback)
+    card_data = _extract_with_ai(text)
     
     # Record extraction (if user_id provided)
     if user_id:

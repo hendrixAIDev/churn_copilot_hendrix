@@ -1,4 +1,4 @@
-"""Flexible spreadsheet importer using Claude API."""
+"""Flexible spreadsheet importer using AI (Gemini default, Claude fallback)."""
 
 import os
 import re
@@ -11,6 +11,11 @@ from .storage import CardStorage
 from .library import get_all_templates, get_template
 from .normalize import normalize_issuer, match_to_library_template
 from .periods import mark_credit_used
+
+# AI provider selection (same as pipeline.py)
+AI_PROVIDER = os.getenv("AI_PROVIDER", "gemini")
+CLAUDE_MODEL = os.getenv("CLAUDE_MODEL", "claude-sonnet-4-20250514")
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
 
 
 class ParsedCard(BaseModel):
@@ -87,38 +92,102 @@ class ParsedCard(BaseModel):
 
 
 class SpreadsheetImporter:
-    """Import cards from spreadsheets using Claude API."""
+    """Import cards from spreadsheets using AI (Gemini default, Claude fallback)."""
 
     def __init__(self, api_key: Optional[str] = None):
-        """Initialize importer with Anthropic API key.
+        """Initialize importer with API key.
 
         Args:
-            api_key: Anthropic API key. If None, reads from ANTHROPIC_API_KEY env var or Streamlit secrets.
+            api_key: API key (Gemini or Claude depending on AI_PROVIDER).
         """
-        if api_key:
-            self.api_key = api_key
-        else:
-            # Try environment variable first (platform-independent)
-            self.api_key = os.getenv("ANTHROPIC_API_KEY")
-            
-            if not self.api_key:
-                # Fall back to Streamlit secrets (if Streamlit is available)
+        self.provider = AI_PROVIDER.lower()
+        
+        if self.provider == "gemini":
+            # Try Gemini first
+            self.gemini_key = api_key or os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
+            if not self.gemini_key:
                 try:
                     import streamlit as st
-                    self.api_key = st.secrets.get("ANTHROPIC_API_KEY")
+                    self.gemini_key = st.secrets.get("GEMINI_API_KEY") or st.secrets.get("GOOGLE_API_KEY")
                 except:
                     pass
-
-        if not self.api_key:
-            raise ValueError("ANTHROPIC_API_KEY not found in environment or Streamlit secrets")
-
-        # Lazy import Anthropic SDK (saves ~7s on app startup)
-        import anthropic
-        self.client = anthropic.Anthropic(api_key=self.api_key)
+            
+            # Also get Claude key for fallback
+            self.claude_key = os.getenv("ANTHROPIC_API_KEY")
+            if not self.claude_key:
+                try:
+                    import streamlit as st
+                    self.claude_key = st.secrets.get("ANTHROPIC_API_KEY")
+                except:
+                    pass
+            
+            if not self.gemini_key and not self.claude_key:
+                raise ValueError("Neither GEMINI_API_KEY nor ANTHROPIC_API_KEY found")
+        else:
+            # Claude mode
+            self.claude_key = api_key or os.getenv("ANTHROPIC_API_KEY")
+            if not self.claude_key:
+                try:
+                    import streamlit as st
+                    self.claude_key = st.secrets.get("ANTHROPIC_API_KEY")
+                except:
+                    pass
+            
+            if not self.claude_key:
+                raise ValueError("ANTHROPIC_API_KEY not found")
+            
+            self.gemini_key = None
+        
         self.storage = CardStorage()
 
+    def _call_ai(self, prompt: str) -> str:
+        """Call AI provider and return response text.
+        
+        Uses Gemini by default, falls back to Claude on failure.
+        
+        Args:
+            prompt: The prompt to send to the AI.
+            
+        Returns:
+            Response text from the AI.
+        """
+        if self.provider == "gemini" and self.gemini_key:
+            try:
+                return self._call_gemini(prompt)
+            except Exception as e:
+                import logging
+                logging.warning(f"Gemini failed: {e}, falling back to Claude")
+                if self.claude_key:
+                    return self._call_claude(prompt)
+                raise
+        else:
+            return self._call_claude(prompt)
+    
+    def _call_gemini(self, prompt: str) -> str:
+        """Call Gemini API."""
+        from google import genai
+        client = genai.Client(api_key=self.gemini_key)
+        
+        response = client.models.generate_content(
+            model=GEMINI_MODEL,
+            contents=prompt
+        )
+        return response.text
+    
+    def _call_claude(self, prompt: str) -> str:
+        """Call Claude API."""
+        import anthropic
+        client = anthropic.Anthropic(api_key=self.claude_key)
+        
+        response = client.messages.create(
+            model=CLAUDE_MODEL,
+            max_tokens=16000,
+            messages=[{"role": "user", "content": prompt}]
+        )
+        return response.content[0].text
+
     def parse_spreadsheet(self, csv_content: str, skip_closed: bool = True) -> tuple[list[ParsedCard], list[str]]:
-        """Parse spreadsheet content using Claude API.
+        """Parse spreadsheet content using AI (Gemini default, Claude fallback).
 
         Args:
             csv_content: Raw CSV/TSV content of the spreadsheet
@@ -195,14 +264,10 @@ Output format:
 ]
 ```"""
 
-        response = self.client.messages.create(
-            model="claude-sonnet-4-20250514",
-            max_tokens=16000,
-            messages=[{"role": "user", "content": prompt}]
-        )
+        # Call AI provider (Gemini default, Claude fallback)
+        response_text = self._call_ai(prompt)
 
-        # Extract JSON from response
-        response_text = response.content[0].text
+        # Continue with existing parsing logic below
 
         # Try to extract JSON array
         json_match = re.search(r'\[\s*\{.*\}\s*\]', response_text, re.DOTALL)
