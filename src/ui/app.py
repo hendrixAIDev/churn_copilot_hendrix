@@ -1778,9 +1778,22 @@ def render_add_card_section():
 
         # Parse and preview
         if spreadsheet_data and st.button("Parse Spreadsheet", type="primary", key="import_parse_btn"):
+            # Check AI rate limit first (spreadsheet parsing uses AI)
+            user_id = UUID(st.session_state.user_id)
+            can_extract, remaining, rate_limit_message = check_extraction_limit(user_id)
+            
+            if not can_extract:
+                st.error(f"🚫 **{rate_limit_message}**")
+                st.caption("Spreadsheet parsing uses AI extraction. Resets on the 1st of next month.")
+                return
+            
             with st.spinner("🤖 AI is analyzing your spreadsheet..."):
                 try:
                     from src.core.importer import import_from_csv
+                    from src.core.ai_rate_limit import record_extraction
+                    
+                    # Record this extraction against the rate limit
+                    record_extraction(user_id)
 
                     parsed_cards, errors = import_from_csv(spreadsheet_data, skip_closed=True)
 
