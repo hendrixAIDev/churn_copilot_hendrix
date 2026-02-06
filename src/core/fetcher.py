@@ -67,7 +67,9 @@ def fetch_card_page(url: str, timeout: int = DEFAULT_TIMEOUT) -> str:
         if not parsed.scheme or not parsed.netloc:
             raise FetchError("Invalid URL format")
     except Exception as e:
-        raise FetchError(f"Invalid URL: {e}")
+        import logging
+        logging.error(f"URL validation failed: {e}")
+        raise FetchError("Invalid URL format - please check the URL and try again")
 
     # Check domain is allowed
     domain = parsed.netloc.lower().replace("www.", "")
@@ -117,7 +119,9 @@ def _fetch_with_jina(url: str, timeout: int) -> str:
     except requests.Timeout:
         raise FetchError("Request timed out - try again later")
     except requests.RequestException as e:
-        raise FetchError(f"Failed to fetch URL: {e}")
+        import logging
+        logging.error(f"Request failed: {e}")
+        raise FetchError("Unable to fetch the page. Please check the URL and try again.")
 
 
 def _clean_markdown(content: str) -> str:

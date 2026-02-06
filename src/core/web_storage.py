@@ -329,9 +329,13 @@ class WebStorage:
             self._set_data(data)
             return len(data)
         except json.JSONDecodeError as e:
-            raise StorageError(f"Invalid JSON: {e}")
+            import logging
+            logging.error(f"Invalid JSON: {e}")
+            raise StorageError("Invalid data format - please check your import file")
         except Exception as e:
-            raise StorageError(f"Import failed: {e}")
+            import logging
+            logging.error(f"Import failed: {e}")
+            raise StorageError("Unable to import data - please try again")
 
 
 # Legacy aliases for compatibility

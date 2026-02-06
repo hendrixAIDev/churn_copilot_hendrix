@@ -227,7 +227,7 @@ def _extract_with_gemini(content: str, max_content_chars: int = 15000) -> CardDa
         import logging
         logging.error(f"Gemini extraction failed: {e}")
         # Re-raise as ExtractionError so caller can handle fallback
-        raise ExtractionError(f"Gemini extraction failed: {str(e)[:100]}")
+        raise ExtractionError("AI extraction temporarily unavailable - please try again")
 
 
 def _extract_with_claude(content: str, max_content_chars: int = 15000) -> CardData:

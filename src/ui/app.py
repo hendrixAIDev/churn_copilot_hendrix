@@ -1793,10 +1793,12 @@ def render_add_card_section():
                     # Handle results (best-effort)
                     if not parsed_cards and errors:
                         # Complete failure
-                        st.error("❌ Failed to parse any cards")
+                        st.error("Unable to parse any cards from the spreadsheet. Please check the format and try again.")
                         with st.expander("Error details"):
                             for error in errors:
                                 st.error(f"• {error}")
+                        import logging
+                        logging.error(f"Spreadsheet import failed: {len(errors)} errors")
                         return
 
                     elif not parsed_cards:

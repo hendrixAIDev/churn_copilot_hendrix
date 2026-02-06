@@ -52,7 +52,9 @@ class CardStorage:
             content = self.cards_file.read_text()
             return json.loads(content)
         except (json.JSONDecodeError, IOError) as e:
-            raise StorageError(f"Failed to load cards: {e}")
+            import logging
+            logging.error(f"Failed to load cards: {e}")
+            raise StorageError("Unable to load your saved cards")
 
     def _save_cards(self, cards: list[dict]) -> None:
         """Save card data to JSON file."""
@@ -61,7 +63,9 @@ class CardStorage:
                 json.dumps(cards, indent=2, default=str)
             )
         except IOError as e:
-            raise StorageError(f"Failed to save cards: {e}")
+            import logging
+            logging.error(f"Failed to save cards: {e}")
+            raise StorageError("Unable to save your cards")
 
     def get_all_cards(self) -> list[Card]:
         """Retrieve all stored cards.
