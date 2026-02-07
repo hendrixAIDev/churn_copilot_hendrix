@@ -30,11 +30,15 @@ def get_capability_status() -> Dict[str, Any]:
     
     # ─── Capability: Database ────────────────────────────────────────────────
     try:
-        from src.core.database import get_supabase_client
-        client = get_supabase_client()
-        # Simple query to verify DB connection
-        client.table("users").select("id").limit(1).execute()
-        capabilities["database"] = {"ok": True}
+        from src.core.database import check_connection
+        if check_connection():
+            capabilities["database"] = {"ok": True}
+        else:
+            capabilities["database"] = {
+                "ok": False,
+                "reason": "connection_failed"
+            }
+            overall_ok = False
     except Exception as e:
         capabilities["database"] = {
             "ok": False,
@@ -54,11 +58,6 @@ def get_capability_status() -> Dict[str, Any]:
     
     # ─── Capability: AI Extraction ───────────────────────────────────────────
     try:
-        from src.core.ai_rate_limit import AIRateLimiter
-        limiter = AIRateLimiter()
-        
-        # Check if we're within rate limits
-        # Get a mock user_id to check limits (actual check happens per-user)
         ai_ok = True
         ai_reason = None
         
