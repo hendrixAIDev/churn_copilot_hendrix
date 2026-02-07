@@ -3802,6 +3802,25 @@ def show_legal_page(page_type):
 
 def main():
     """Main application entry point."""
+    
+    # ─── SCHP Health Endpoint ────────────────────────────────────────────────
+    # Check for health capabilities request before any other processing
+    # Access via: ?health=capabilities
+    if st.query_params.get("health") == "capabilities":
+        from src.core.health import get_capability_status
+        import json
+        st.set_page_config(page_title="Health Check", layout="centered")
+        st.markdown("""
+        <style>
+            .stApp > header { display: none; }
+            #MainMenu { display: none; }
+            footer { display: none; }
+        </style>
+        """, unsafe_allow_html=True)
+        status = get_capability_status()
+        st.code(json.dumps(status, indent=2), language="json")
+        return
+    
     st.set_page_config(
         page_title="ChurnPilot — Credit Card Intelligence",
         page_icon="💳",
