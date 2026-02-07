@@ -1790,12 +1790,10 @@ def render_add_card_section():
             with st.spinner("🤖 AI is analyzing your spreadsheet..."):
                 try:
                     from src.core.importer import import_from_csv
-                    from src.core.ai_rate_limit import record_extraction
-                    
-                    # Record this extraction against the rate limit
-                    record_extraction(user_id)
+                    from src.core.exceptions import ExtractionError
 
-                    parsed_cards, errors = import_from_csv(spreadsheet_data, skip_closed=True)
+                    # Pass user_id for rate limiting (checked internally by importer)
+                    parsed_cards, errors = import_from_csv(spreadsheet_data, skip_closed=True, user_id=user_id)
 
                     # Handle results (best-effort)
                     if not parsed_cards and errors:
@@ -1902,6 +1900,10 @@ def render_add_card_section():
                                             status_icon = "✓" if benefit.get("is_used") else "○"
                                             st.caption(f"{status_icon} ${benefit['amount']} {benefit['name']} ({benefit['frequency']})")
 
+                except ExtractionError as e:
+                    # Rate limit exceeded or other extraction error
+                    st.error(f"❌ {str(e)}")
+                    st.info("💡 You can still add cards from our library or enter details manually.")
                 except Exception as e:
                     st.error("Unable to parse spreadsheet data. Please check the format matches the expected columns and try again.")
                     import logging

@@ -186,16 +186,25 @@ class SpreadsheetImporter:
         )
         return response.content[0].text
 
-    def parse_spreadsheet(self, csv_content: str, skip_closed: bool = True) -> tuple[list[ParsedCard], list[str]]:
+    def parse_spreadsheet(self, csv_content: str, skip_closed: bool = True, user_id: Optional[UUID] = None) -> tuple[list[ParsedCard], list[str]]:
         """Parse spreadsheet content using AI (Gemini default, Claude fallback).
 
         Args:
             csv_content: Raw CSV/TSV content of the spreadsheet
             skip_closed: Whether to skip cards marked as closed
+            user_id: User UUID for rate limiting. If None, rate limiting is skipped.
 
         Returns:
             Tuple of (successfully_parsed_cards, error_messages)
+            
+        Raises:
+            ExtractionError: If rate limit exceeded.
         """
+        # Check rate limit (if user_id provided)
+        if user_id:
+            can_extract, remaining, message = check_extraction_limit(user_id)
+            if not can_extract:
+                raise ExtractionError(message)
         # Get available templates for matching
         templates = get_all_templates()
         template_names = [f"{t.issuer} {t.name}" for t in templates]
@@ -266,8 +275,10 @@ Output format:
 
         # Call AI provider (Gemini default, Claude fallback)
         response_text = self._call_ai(prompt)
-
-        # Continue with existing parsing logic below
+        
+        # Record extraction (if user_id provided) - only after successful API call
+        if user_id:
+            record_extraction(user_id)
 
         # Try to extract JSON array
         json_match = re.search(r'\[\s*\{.*\}\s*\]', response_text, re.DOTALL)
@@ -422,12 +433,13 @@ Output format:
         return imported_cards
 
 
-def import_from_csv(csv_content: str, skip_closed: bool = True) -> tuple[list[ParsedCard], list[str]]:
+def import_from_csv(csv_content: str, skip_closed: bool = True, user_id: Optional[UUID] = None) -> tuple[list[ParsedCard], list[str]]:
     """Import cards from CSV content (best-effort).
 
     Args:
         csv_content: Raw CSV/TSV content
         skip_closed: Whether to skip closed cards
+        user_id: User UUID for rate limiting. If None, rate limiting is skipped.
 
     Returns:
         Tuple of (parsed_cards, errors)
@@ -436,7 +448,7 @@ def import_from_csv(csv_content: str, skip_closed: bool = True) -> tuple[list[Pa
     """
     try:
         importer = SpreadsheetImporter()
-        parsed_cards, parse_errors = importer.parse_spreadsheet(csv_content, skip_closed=skip_closed)
+        parsed_cards, parse_errors = importer.parse_spreadsheet(csv_content, skip_closed=skip_closed, user_id=user_id)
         return parsed_cards, parse_errors
     except Exception as e:
         return [], [f"Critical error: {str(e)}"]
