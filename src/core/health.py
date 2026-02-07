@@ -185,3 +185,4 @@ def render_health_badge() -> str:
         <span>{text}</span>
     </div>
     """
+
