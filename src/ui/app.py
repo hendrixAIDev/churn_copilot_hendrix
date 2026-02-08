@@ -779,8 +779,20 @@ Credits and Benefits:
 def get_cookie_manager():
     """Get or create a CookieManager instance."""
     if "_cookie_manager" not in st.session_state:
-        st.session_state._cookie_manager = CookieManager()
+        st.session_state._cookie_manager = CookieManager(key="churnpilot_cookies")
     return st.session_state._cookie_manager
+
+
+def set_session_cookie(token: str):
+    """Set the session cookie with proper expiration (7 days)."""
+    try:
+        cookie_manager = get_cookie_manager()
+        # Set cookie to expire in 7 days
+        expires = datetime.now() + timedelta(days=7)
+        cookie_manager.set(SESSION_COOKIE_KEY, token, expires_at=expires)
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning(f"Failed to set session cookie: {e}")
 
 
 def check_stored_session() -> bool:
@@ -835,8 +847,10 @@ def check_stored_session() -> bool:
         st.session_state._session_check_done = True
         return True
     else:
-        # Invalid/expired token — clear from both query params and cookies
-        st.query_params.clear()
+        # Invalid/expired token — clear from query params and cookies
+        # Only clear the session param, not all params (preserves other query params like ?page=)
+        if SESSION_QUERY_PARAM in st.query_params:
+            del st.query_params[SESSION_QUERY_PARAM]
         try:
             cookie_manager = get_cookie_manager()
             cookie_manager.delete(SESSION_COOKIE_KEY)
@@ -934,12 +948,8 @@ def show_auth_page():
                                 st.session_state.session_token = token
                                 # Save token to query params for persistence
                                 st.query_params[SESSION_QUERY_PARAM] = token
-                                # Save token to cookie for fresh URL navigation
-                                try:
-                                    cookie_manager = get_cookie_manager()
-                                    cookie_manager.set(SESSION_COOKIE_KEY, token, expires_at=None)
-                                except Exception:
-                                    pass  # Cookie setting is best-effort
+                                # Save token to cookie for fresh URL navigation (7-day expiry)
+                                set_session_cookie(token)
                                 # Rerun to refresh with authenticated state
                                 st.rerun()
                             else:
@@ -997,12 +1007,8 @@ def show_auth_page():
                             st.session_state.session_token = token
                             # Save token to query params for persistence
                             st.query_params[SESSION_QUERY_PARAM] = token
-                            # Save token to cookie for fresh URL navigation
-                            try:
-                                cookie_manager = get_cookie_manager()
-                                cookie_manager.set(SESSION_COOKIE_KEY, token, expires_at=None)
-                            except Exception:
-                                pass  # Cookie setting is best-effort
+                            # Save token to cookie for fresh URL navigation (7-day expiry)
+                            set_session_cookie(token)
                             # Rerun to refresh with authenticated state
                             st.success("Account created! Redirecting...")
                             st.rerun()
