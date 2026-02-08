@@ -116,11 +116,11 @@ class SpreadsheetImporter:
                     pass
             
             # Also get Claude key for fallback
-            self.claude_key = os.getenv("ANTHROPIC_API_KEY")
+            self.claude_key = os.getenv("ANTHROPIC_API_KEY") or os.getenv("CLAUDE_API_KEY")
             if not self.claude_key:
                 try:
                     import streamlit as st
-                    self.claude_key = st.secrets.get("ANTHROPIC_API_KEY")
+                    self.claude_key = st.secrets.get("ANTHROPIC_API_KEY") or st.secrets.get("CLAUDE_API_KEY")
                 except:
                     pass
             
@@ -128,11 +128,11 @@ class SpreadsheetImporter:
                 raise ValueError("Neither GEMINI_API_KEY nor ANTHROPIC_API_KEY found")
         else:
             # Claude mode
-            self.claude_key = api_key or os.getenv("ANTHROPIC_API_KEY")
+            self.claude_key = api_key or os.getenv("ANTHROPIC_API_KEY") or os.getenv("CLAUDE_API_KEY")
             if not self.claude_key:
                 try:
                     import streamlit as st
-                    self.claude_key = st.secrets.get("ANTHROPIC_API_KEY")
+                    self.claude_key = st.secrets.get("ANTHROPIC_API_KEY") or st.secrets.get("CLAUDE_API_KEY")
                 except:
                     pass
             
