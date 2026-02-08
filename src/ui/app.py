@@ -3889,26 +3889,25 @@ def main():
     # Show cookie consent banner if not yet accepted
     render_cookie_consent_banner()
 
-    # Initialize storage with user's ID
-    try:
-        storage = DatabaseStorage(UUID(st.session_state.user_id))
-        st.session_state.storage = storage
-    except Exception as e:
-        st.error("Unable to load your data. Please check your connection and refresh the page.")
-        import logging
-        logging.error(f"Storage initialization failed: {e}")
-        return
+    # Initialize storage with user's ID (skip for demo mode - uses mock data)
+    if st.session_state.get("demo_mode"):
+        # Demo mode uses mock storage - no database needed
+        st.session_state.storage = None
+        cards = get_demo_cards()
+        is_new_user = False  # Demo user sees cards
+    else:
+        try:
+            storage = DatabaseStorage(UUID(st.session_state.user_id))
+            st.session_state.storage = storage
+        except Exception as e:
+            st.error("Unable to load your data. Please check your connection and refresh the page.")
+            import logging
+            logging.error(f"Storage initialization failed: {e}")
+            return
+        cards = st.session_state.storage.get_all_cards()
+        is_new_user = len(cards) == 0
 
     init_session_state()
-
-    # Get cards - use demo cards if in demo mode
-    if st.session_state.demo_mode:
-        cards = get_demo_cards()
-    else:
-        cards = st.session_state.storage.get_all_cards()
-
-    # Check if this is a first-time user (no cards and should show welcome)
-    is_new_user = len(st.session_state.storage.get_all_cards()) == 0
 
     # Show demo mode banner if active
     if st.session_state.demo_mode:
