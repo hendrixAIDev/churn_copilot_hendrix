@@ -1768,9 +1768,12 @@ def render_add_card_section():
                     st.session_state.spreadsheet_data_loaded = True
                     show_toast_success(f"Loaded {uploaded_file.name}")
                 except Exception as e:
-                    st.error("Unable to read the uploaded file. Please ensure it's a valid CSV or Excel file and try again.")
                     import logging
-                    logging.error(f"File upload failed: {e}")
+                    import uuid
+                    error_id = str(uuid.uuid4())[:8]
+                    logging.error(f"[{error_id}] File upload failed for {uploaded_file.name}: {type(e).__name__}: {e}")
+                    st.error(f"Unable to read the uploaded file. Error: {type(e).__name__}")
+                    st.caption(f"Error ID: `{error_id}` — If this persists, please report this ID via Feedback.")
 
         elif import_method == "Paste CSV/TSV Data":
             st.info("💡 Copy your spreadsheet data (select all cells, Ctrl+C) and paste here.")
