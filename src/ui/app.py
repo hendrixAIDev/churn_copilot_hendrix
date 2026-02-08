@@ -669,7 +669,8 @@ from src.core.rate_limit import (
 )
 from src.core.ai_rate_limit import (
     check_extraction_limit,
-    get_extraction_count,
+    get_usage_display,
+    FREE_TIER_DAILY_LIMIT,
     FREE_TIER_MONTHLY_LIMIT,
 )
 from extra_streamlit_components import CookieManager
@@ -1982,22 +1983,29 @@ def render_add_card_section():
 
         # Show AI extraction usage status - prominent and clear
         user_id = UUID(st.session_state.user_id)
-        can_extract, remaining, rate_limit_message = check_extraction_limit(user_id)
-        
-        # Calculate usage percentage for visual indicator
-        usage_pct = ((FREE_TIER_MONTHLY_LIMIT - remaining) / FREE_TIER_MONTHLY_LIMIT) * 100
+        can_extract, remaining_today, rate_limit_message = check_extraction_limit(user_id)
+        usage = get_usage_display(user_id)
         
         # Color-coded status based on remaining extractions
-        if remaining == 0:
+        if not can_extract:
             st.error(f"🚫 **{rate_limit_message}**")
-            st.caption("Resets on the 1st of next month. You can still add cards from our library or enter details manually.")
-        elif remaining <= 2:
-            st.warning(f"⚠️ **{remaining}/{FREE_TIER_MONTHLY_LIMIT} AI extractions remaining** — Use them wisely!")
+        elif usage['daily_remaining'] <= 0:
+            st.warning(f"⚠️ **Daily limit reached.** Try again tomorrow. ({usage['monthly_used']}/{FREE_TIER_MONTHLY_LIMIT} used this month)")
+        elif usage['monthly_remaining'] <= 2:
+            st.warning(f"⚠️ **{usage['monthly_remaining']} extractions remaining this month** — Use them wisely!")
         else:
-            st.success(f"🤖 **{remaining}/{FREE_TIER_MONTHLY_LIMIT} AI extractions available this month**")
+            st.info(f"🤖 **{remaining_today} extraction{'s' if remaining_today != 1 else ''} remaining today** · {usage['monthly_used']}/{FREE_TIER_MONTHLY_LIMIT} used this month")
         
-        # Visual progress bar
-        st.progress(usage_pct / 100, text=f"Used {FREE_TIER_MONTHLY_LIMIT - remaining} of {FREE_TIER_MONTHLY_LIMIT} extractions")
+        # Visual progress bars for both limits
+        col1, col2 = st.columns(2)
+        with col1:
+            daily_pct = (usage['daily_used'] / FREE_TIER_DAILY_LIMIT) * 100
+            st.caption(f"📅 Daily: {usage['daily_used']}/{FREE_TIER_DAILY_LIMIT}")
+            st.progress(min(daily_pct / 100, 1.0))
+        with col2:
+            monthly_pct = (usage['monthly_used'] / FREE_TIER_MONTHLY_LIMIT) * 100
+            st.caption(f"📆 Monthly: {usage['monthly_used']}/{FREE_TIER_MONTHLY_LIMIT}")
+            st.progress(min(monthly_pct / 100, 1.0))
 
         st.divider()
 
