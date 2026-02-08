@@ -1015,6 +1015,15 @@ def show_auth_page():
                         except ValueError as e:
                             st.error(str(e))
 
+        # Demo mode option
+        st.markdown("<div style='text-align: center; margin: 20px 0 10px 0; color: var(--cp-text-secondary);'>or</div>", unsafe_allow_html=True)
+        
+        if st.button("🚀 Try Demo (No Account Needed)", use_container_width=True, type="secondary"):
+            st.session_state.demo_mode = True
+            st.session_state.user_id = "demo"
+            st.session_state.user_email = "demo@churnpilot.app"
+            st.rerun()
+
         # Feature highlights below auth form
         st.markdown("""
         <div style="margin-top: 32px; text-align: center; padding: 0 16px;">

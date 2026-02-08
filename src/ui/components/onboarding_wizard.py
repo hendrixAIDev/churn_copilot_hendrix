@@ -546,6 +546,7 @@ def should_show_wizard(user_id: Optional[str] = None) -> bool:
         True if wizard should be shown, False otherwise.
 
     Logic:
+        - Never show if skip_wizard query param is set
         - Never show if wizard already completed in session
         - Never show if user has cards  
         - Check DB preference if user_id provided
@@ -553,6 +554,12 @@ def should_show_wizard(user_id: Optional[str] = None) -> bool:
     """
     import logging
     logger = logging.getLogger(__name__)
+    
+    # Check URL param first (allows automation to skip wizard)
+    if st.query_params.get("skip_wizard") == "true":
+        logger.debug("Wizard hidden: skip_wizard=true query param")
+        st.session_state.wizard_completed = True
+        return False
     
     # Check session state first (fastest)
     if st.session_state.get("wizard_completed", False):
