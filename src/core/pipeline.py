@@ -120,11 +120,20 @@ def extract_from_url(url: str, timeout: int = 60, user_id: Optional[UUID] = None
     markdown_content = fetch_card_page(url, timeout)
 
     # Step 2: Extract structured data via AI (Gemini default, Claude fallback)
-    card_data = _extract_with_ai(markdown_content)
+    card_data, model_used, input_chars = _extract_with_ai(markdown_content)
     
-    # Step 2.5: Record extraction (if user_id provided)
+    # Step 2.5: Record extraction with token estimates (if user_id provided)
     if user_id:
-        record_extraction(user_id)
+        # Estimate tokens: ~4 chars per token for English
+        est_input_tokens = input_chars // 4
+        est_output_tokens = 500  # Typical JSON response
+        record_extraction(
+            user_id,
+            input_tokens=est_input_tokens,
+            output_tokens=est_output_tokens,
+            model=model_used,
+            extraction_type="url"
+        )
 
     # Step 3: Auto-enrich with library data (adds missing credits)
     enriched_data, match_result = enrich_card_data(card_data, min_confidence=0.7)
@@ -137,7 +146,7 @@ def extract_from_url(url: str, timeout: int = 60, user_id: Optional[UUID] = None
     return enriched_data
 
 
-def _extract_with_ai(content: str, max_content_chars: int = 15000) -> CardData:
+def _extract_with_ai(content: str, max_content_chars: int = 15000) -> tuple:
     """Extract structured card data using the configured AI provider.
     
     Uses Gemini by default (free tier), falls back to Claude if Gemini fails.
@@ -147,23 +156,27 @@ def _extract_with_ai(content: str, max_content_chars: int = 15000) -> CardData:
         max_content_chars: Maximum content length to send.
         
     Returns:
-        CardData object with extracted fields.
+        Tuple of (CardData, model_used, input_chars)
         
     Raises:
         ExtractionError: If extraction fails.
     """
+    input_chars = min(len(content), max_content_chars)
     provider = AI_PROVIDER.lower()
     
     if provider == "gemini":
         try:
-            return _extract_with_gemini(content, max_content_chars)
+            card_data = _extract_with_gemini(content, max_content_chars)
+            return (card_data, GEMINI_MODEL, input_chars)
         except ExtractionError as e:
             # If Gemini fails (quota, etc.), fall back to Claude
             import logging
             logging.warning(f"Gemini extraction failed: {e}, falling back to Claude")
-            return _extract_with_claude(content, max_content_chars)
+            card_data = _extract_with_claude(content, max_content_chars)
+            return (card_data, CLAUDE_MODEL, input_chars)
     else:
-        return _extract_with_claude(content, max_content_chars)
+        card_data = _extract_with_claude(content, max_content_chars)
+        return (card_data, CLAUDE_MODEL, input_chars)
 
 
 def _extract_with_gemini(content: str, max_content_chars: int = 15000) -> CardData:
