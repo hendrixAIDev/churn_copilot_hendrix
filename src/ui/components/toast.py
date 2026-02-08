@@ -332,19 +332,43 @@ def render_toast(
     st.markdown(html, unsafe_allow_html=True)
 
 
+def _safe_toast(message: str, icon: str) -> None:
+    """Safely show a toast, falling back gracefully on any error.
+    
+    This wrapper ensures that toast display never crashes the app,
+    even if the icon is invalid or Streamlit has other issues.
+    
+    Args:
+        message: Message to display.
+        icon: Emoji icon (must be actual emoji, not Unicode symbols).
+    """
+    try:
+        st.toast(message, icon=icon)
+    except Exception as e:
+        # Log the error but don't crash - toasts are non-critical UI
+        import logging
+        logging.warning(f"Toast display failed (icon={repr(icon)}): {e}")
+        try:
+            # Fallback: show toast without icon
+            st.toast(message)
+        except Exception:
+            # Last resort: silently fail - toasts are nice-to-have
+            pass
+
+
 def show_toast_success(message: str, icon: str = "✅") -> None:
     """Show a success toast using Streamlit's native toast.
 
     Args:
         message: Success message.
-        icon: Icon to display.
+        icon: Icon to display (must be valid emoji).
 
     Example:
         ```python
         show_toast_success("Card added successfully!")
         ```
     """
-    st.toast(message, icon=icon)
+    _safe_toast(message, icon)
 
 
 def show_toast_error(message: str, icon: str = "❌") -> None:
@@ -352,14 +376,14 @@ def show_toast_error(message: str, icon: str = "❌") -> None:
 
     Args:
         message: Error message.
-        icon: Icon to display.
+        icon: Icon to display (must be valid emoji).
 
     Example:
         ```python
         show_toast_error("Failed to save card")
         ```
     """
-    st.toast(message, icon=icon)
+    _safe_toast(message, icon)
 
 
 def show_toast_warning(message: str, icon: str = "⚠️") -> None:
@@ -367,14 +391,14 @@ def show_toast_warning(message: str, icon: str = "⚠️") -> None:
 
     Args:
         message: Warning message.
-        icon: Icon to display.
+        icon: Icon to display (must be valid emoji).
 
     Example:
         ```python
         show_toast_warning("Deadline approaching!")
         ```
     """
-    st.toast(message, icon=icon)
+    _safe_toast(message, icon)
 
 
 def show_toast_info(message: str, icon: str = "ℹ️") -> None:
@@ -382,14 +406,14 @@ def show_toast_info(message: str, icon: str = "ℹ️") -> None:
 
     Args:
         message: Info message.
-        icon: Icon to display.
+        icon: Icon to display (must be valid emoji).
 
     Example:
         ```python
         show_toast_info("Tip: You can swipe cards to delete them")
         ```
     """
-    st.toast(message, icon=icon)
+    _safe_toast(message, icon)
 
 
 def render_snackbar(
