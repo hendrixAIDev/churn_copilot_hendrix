@@ -3916,8 +3916,8 @@ def main():
         wizard_action = render_onboarding_wizard(
             current_step=st.session_state.wizard_step,
             template_count=template_count,
-            on_complete=lambda: mark_wizard_completed(user_id),
-            on_skip=lambda: mark_wizard_completed(user_id),
+            on_complete=None,  # We'll handle completion in action handler
+            on_skip=None,      # We'll handle skip in action handler
             key_prefix="onboarding",
         )
 

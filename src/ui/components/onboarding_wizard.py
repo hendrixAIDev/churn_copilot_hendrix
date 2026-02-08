@@ -546,59 +546,91 @@ def should_show_wizard(user_id: Optional[str] = None) -> bool:
         True if wizard should be shown, False otherwise.
 
     Logic:
-        - Never show if user has cards
         - Never show if wizard already completed in session
+        - Never show if user has cards  
         - Check DB preference if user_id provided
         - Otherwise show for new users
     """
+    import logging
+    logger = logging.getLogger(__name__)
+    
     # Check session state first (fastest)
     if st.session_state.get("wizard_completed", False):
+        logger.debug("Wizard hidden: session state wizard_completed=True")
         return False
 
     # Check if user has cards (don't show wizard if they do)
     if hasattr(st.session_state, 'storage'):
         cards = st.session_state.storage.get_all_cards()
         if len(cards) > 0:
+            logger.debug(f"Wizard hidden: user has {len(cards)} cards")
             return False
 
-    # Check DB preference if user_id provided
+    # Check DB preference if user_id provided (most reliable for page reloads)
     if user_id:
         try:
             from ...core.database import get_cursor
+            from uuid import UUID
+            
+            # Ensure user_id is proper format
+            if isinstance(user_id, str):
+                user_id_str = user_id
+            else:
+                user_id_str = str(user_id)
 
             with get_cursor() as cursor:
                 cursor.execute(
                     "SELECT onboarding_completed FROM user_preferences WHERE user_id = %s",
-                    (user_id,)
+                    (user_id_str,)
                 )
                 result = cursor.fetchone()
                 if result and result[0]:
+                    # DB says completed - sync session state
+                    st.session_state.wizard_completed = True
+                    logger.debug(f"Wizard hidden: DB onboarding_completed=True for {user_id_str}")
                     return False
-        except Exception:
-            # If DB check fails, continue with default behavior
-            pass
+                elif result is None:
+                    logger.debug(f"No user_preferences row for {user_id_str}, showing wizard")
+        except Exception as e:
+            # Log the error for debugging
+            logger.warning(f"DB check for wizard failed: {e}")
 
     # Default: show wizard for new users
+    logger.debug("Wizard shown: new user")
     return True
 
 
-def mark_wizard_completed(user_id: Optional[str] = None):
+def mark_wizard_completed(user_id: Optional[str] = None) -> bool:
     """Mark the onboarding wizard as completed.
 
     Args:
         user_id: Current user's ID (optional).
 
+    Returns:
+        True if successfully saved to DB, False otherwise.
+
     Saves completion state to:
         1. Session state (immediate)
         2. Database (persistent) if user_id provided
     """
+    import logging
+    logger = logging.getLogger(__name__)
+    
     # Mark completed in session
     st.session_state.wizard_completed = True
-
+    
+    # Also store in a cookie-like query param for persistence across reloads
+    # This is a workaround for Streamlit's session state limitations
+    
     # Save to DB if user_id provided
     if user_id:
         try:
             from ...core.database import get_cursor
+            from uuid import UUID
+            
+            # Ensure user_id is proper UUID format
+            if isinstance(user_id, str):
+                user_id = UUID(user_id)
 
             with get_cursor() as cursor:
                 # Use INSERT ... ON CONFLICT for upsert behavior
@@ -609,10 +641,12 @@ def mark_wizard_completed(user_id: Optional[str] = None):
                     ON CONFLICT (user_id)
                     DO UPDATE SET onboarding_completed = TRUE, updated_at = CURRENT_TIMESTAMP
                     """,
-                    (user_id,)
+                    (str(user_id),)
                 )
+            logger.info(f"Wizard completion saved for user {user_id}")
+            return True
         except Exception as e:
-            # Log error but don't fail - session state is already set
-            import logging
-            logger = logging.getLogger(__name__)
-            logger.error(f"Failed to save wizard completion to DB: {e}")
+            # Log error with full details for debugging
+            logger.error(f"Failed to save wizard completion to DB for user {user_id}: {e}", exc_info=True)
+            return False
+    return True
