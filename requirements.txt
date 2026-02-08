@@ -8,6 +8,9 @@ extra-streamlit-components>=0.1.71
 pandas>=2.0.0
 openpyxl>=3.1.0
 
+# AI providers
+google-genai>=1.0.0
+
 # Database
 psycopg2-binary>=2.9.0
 bcrypt>=4.0.0
