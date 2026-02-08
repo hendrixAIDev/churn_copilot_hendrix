@@ -332,7 +332,7 @@ def render_toast(
     st.markdown(html, unsafe_allow_html=True)
 
 
-def show_toast_success(message: str, icon: str = "✓") -> None:
+def show_toast_success(message: str, icon: str = "✅") -> None:
     """Show a success toast using Streamlit's native toast.
 
     Args:
