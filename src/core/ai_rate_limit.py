@@ -21,6 +21,57 @@ FREE_TIER_DAILY_LIMIT = 2
 FREE_TIER_MONTHLY_LIMIT = 10
 GLOBAL_MONTHLY_LIMIT = 500  # Budget protection
 
+# Test accounts - exempt from rate limits (for automated testing)
+# These accounts get unlimited extractions in all environments
+TEST_ACCOUNT_EMAILS = {
+    "hendrix.ai.dev@gmail.com",  # Hendrix's test account
+    "test@churnpilot.dev",       # Automated test account
+}
+
+# Test account patterns (regex-like matching)
+TEST_ACCOUNT_PATTERNS = [
+    "test_",          # Matches test_*@*.com (pytest fixtures)
+    "e2e_test_",      # E2E test accounts
+    "journey_test_",  # Journey test accounts
+]
+
+
+def is_test_account(user_id: UUID) -> bool:
+    """Check if user is a test account (exempt from rate limits).
+    
+    Test accounts are identified by:
+    1. Exact email match in TEST_ACCOUNT_EMAILS
+    2. Email starting with any pattern in TEST_ACCOUNT_PATTERNS
+    
+    Returns:
+        True if user is a test account, False otherwise
+    """
+    try:
+        with get_cursor(commit=False) as cursor:
+            cursor.execute(
+                "SELECT email FROM users WHERE id = %s",
+                (str(user_id),)
+            )
+            result = cursor.fetchone()
+            if not result:
+                return False
+            
+            email = result['email'].lower()
+            
+            # Check exact matches
+            if email in TEST_ACCOUNT_EMAILS:
+                return True
+            
+            # Check pattern matches (email starts with pattern)
+            email_prefix = email.split('@')[0]
+            for pattern in TEST_ACCOUNT_PATTERNS:
+                if email_prefix.startswith(pattern):
+                    return True
+            
+            return False
+    except Exception:
+        return False
+
 
 def get_current_month_key() -> str:
     """Get the current month key (YYYY-MM format)."""
@@ -91,10 +142,15 @@ def check_extraction_limit(user_id: UUID) -> Tuple[bool, int, str]:
     """Check if user can perform another AI extraction.
     
     Checks daily, monthly, and global limits.
+    Test accounts are exempt from all limits.
     
     Returns:
         Tuple of (can_extract, remaining_today, message)
     """
+    # Test accounts bypass all limits
+    if is_test_account(user_id):
+        return True, 999, "Test account - unlimited extractions"
+    
     counts = get_extraction_count(user_id)
     global_count = get_global_monthly_count()
     
