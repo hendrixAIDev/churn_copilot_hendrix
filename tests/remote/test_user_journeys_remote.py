@@ -304,8 +304,9 @@ class TestDataPersistenceJourney:
         page.reload()
         wait_for_streamlit(page)
         
-        # Page should load successfully
-        assert page.url.startswith(EXPERIMENT_URL.replace("https://", "").replace("http://", ""))
+        # Page should load successfully (URL contains our domain)
+        expected_domain = EXPERIMENT_URL.replace("https://", "").replace("http://", "").rstrip("/")
+        assert expected_domain in page.url, f"Expected {expected_domain} in {page.url}"
 
 
 # =============================================================================
