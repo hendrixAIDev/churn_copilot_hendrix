@@ -1770,9 +1770,11 @@ def render_add_card_section():
                 except Exception as e:
                     import logging
                     import uuid
+                    import traceback
                     error_id = str(uuid.uuid4())[:8]
-                    logging.error(f"[{error_id}] File upload failed for {uploaded_file.name}: {type(e).__name__}: {e}")
-                    st.error(f"Unable to read the uploaded file. Error: {type(e).__name__}")
+                    full_traceback = traceback.format_exc()
+                    logging.error(f"[{error_id}] File upload failed for {uploaded_file.name}: {type(e).__name__}: {e}\n{full_traceback}")
+                    st.error(f"Unable to read the uploaded file. Error: {type(e).__name__}: {str(e)[:100]}")
                     st.caption(f"Error ID: `{error_id}` — If this persists, please report this ID via Feedback.")
 
         elif import_method == "Paste CSV/TSV Data":
