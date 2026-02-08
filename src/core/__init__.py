@@ -50,6 +50,8 @@ from .ai_rate_limit import (
     record_extraction,
     get_extraction_count,
     get_extraction_history,
+    get_usage_display,
+    FREE_TIER_DAILY_LIMIT,
     FREE_TIER_MONTHLY_LIMIT,
 )
 
@@ -132,5 +134,7 @@ __all__ = [
     "record_extraction",
     "get_extraction_count",
     "get_extraction_history",
+    "get_usage_display",
+    "FREE_TIER_DAILY_LIMIT",
     "FREE_TIER_MONTHLY_LIMIT",
 ]
