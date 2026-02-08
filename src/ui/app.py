@@ -1752,6 +1752,8 @@ def render_add_card_section():
                             return
 
                         try:
+                            # Reset file position to start (in case it was read before)
+                            uploaded_file.seek(0)
                             df = pd.read_excel(uploaded_file)
                             spreadsheet_data = df.to_csv(sep='\t', index=False)
                         except ImportError as ie:
@@ -1764,6 +1766,8 @@ def render_add_card_section():
                                 logging.error(f"Excel read failed: {ie}")
                             return
                     else:
+                        # Reset file position for CSV/TSV
+                        uploaded_file.seek(0)
                         spreadsheet_data = uploaded_file.getvalue().decode('utf-8')
                     st.session_state.spreadsheet_data_loaded = True
                     show_toast_success(f"Loaded {uploaded_file.name}")
