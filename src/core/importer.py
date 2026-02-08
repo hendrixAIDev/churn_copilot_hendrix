@@ -4,6 +4,7 @@ import os
 import re
 from datetime import date, datetime, timedelta
 from typing import Optional
+from uuid import UUID
 from pydantic import BaseModel
 
 from .models import Card, SignupBonus, Credit, CreditUsage
@@ -11,6 +12,8 @@ from .storage import CardStorage
 from .library import get_all_templates, get_template
 from .normalize import normalize_issuer, match_to_library_template
 from .periods import mark_credit_used
+from .ai_rate_limit import check_extraction_limit, record_extraction
+from .exceptions import ExtractionError
 
 # AI provider selection (same as pipeline.py)
 AI_PROVIDER = os.getenv("AI_PROVIDER", "gemini")
